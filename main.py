@@ -1,3 +1,5 @@
+import time
+
 from fastapi import FastAPI, Request, Response
 import httpx 
 app=FastAPI()
@@ -7,6 +9,22 @@ routes={
     "json":"http://jsonplaceholder.typicode.com"
 }
 
+
+@app.middleware("http")
+async def middleman(request:Request, call_next):
+    start_time = time.perf_counter()
+
+    try:
+        response = await call_next(request)
+    except Exception as e:
+        time_duration = time.perf_counter() - start_time
+        print(request.method, request.url.path, 500, time_duration)
+        raise e
+
+    time_duration = time.perf_counter() - start_time
+    print(request.method, request.url.path, response.status_code, time_duration)
+
+    return response
 
 @app.api_route("/proxy/{pref}/{full_path:path}",methods=["GET","POST","PUT","PATCH","DELETE"])
 async def root(pref:str,full_path:str,request:Request):
@@ -30,6 +48,7 @@ async def root(pref:str,full_path:str,request:Request):
                 headers=headers,
                 params=query_params,
                 content=await request.body()
+
             )
             excluded = {
                 "content-length",
