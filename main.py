@@ -1,5 +1,5 @@
 import time
-
+from collections import deque
 from fastapi import FastAPI, Request, Response
 import httpx 
 app=FastAPI()
@@ -21,63 +21,104 @@ tenants={
 }
 
 
-rate_store = {
-    "key1":{
-        "recent_requests": [],
-        "limit": 3,
-        "window_size": 60
+# ---------------- CONFIG ----------------
+rate_limit_config = {
+    "key1": {
+        "refill_rate": 1,   # tokens per second
+        "capacity": 10
     },
-    "key2":{
-        "recent_requests": [],
-        "limit": 4,
-        "window_size": 30
+    "key2": {
+        "refill_rate": 1,
+        "capacity": 5
     }
 }
 
+# ---------------- STATE ----------------
+rate_store = {}
+
+# ---------------- MIDDLEWARE ----------------
 @app.middleware("http")
 async def rate_limiter(request:Request, call_next):
     now = time.time()
-    
-    # get api key safely
+
+    # get api key
     api_key = request.state.api_key
     if(api_key is None):
         return Response(content="Missing API Key", status_code=401)
 
-    # get or initialize rate config
+    # get config
+    rate_config = rate_limit_config.get(api_key)
+    if(rate_config is None):
+        rate_config = {
+            "refill_rate": 5,
+            "capacity": 30
+        }
+        rate_limit_config[api_key] = rate_config
+
+    refill_rate = rate_config["refill_rate"]
+    capacity = rate_config["capacity"]
+
+    # get or initialize state
     rate = rate_store.get(api_key)
     if(rate is None):
         rate = {
-            "recent_requests": [],
-            "limit": 3,
-            "window_size": 60
+            "tokens": capacity,          # start full
+            "last_refill": now
         }
         rate_store[api_key] = rate
 
-    rate_requests = rate["recent_requests"]
-    rate_limit = rate["limit"]
-    rate_window = rate["window_size"]
+    tokens = rate["tokens"]
+    last_refill = rate["last_refill"]
 
-    cutoff = now - rate_window
+    #REFILL LOGIC
+    elapsed = now - last_refill
+    tokens += elapsed * refill_rate
+    tokens = min(capacity, tokens)
 
-    # remove old timestamps
-    while(len(rate_requests) > 0 and rate_requests[0] < cutoff):
-        rate_requests.pop(0)
+    # update refill time
+    last_refill = now
 
-    # check limit
-    if(len(rate_requests) >= rate_limit):
-        return Response(content="Too many requests", status_code=429)
+    #BLOCK CASE
+    if(tokens < 1):
+        remaining = 0
 
-    # record current request
-    rate_requests.append(now)
+        # time to get 1 token
+        reset_time = (1 - tokens) / refill_rate if refill_rate > 0 else 0
 
-    # continue request
+        response = Response(content="Too many requests", status_code=429)
+        response.headers["X-RateLimit-Limit"] = str(capacity)
+        response.headers["X-RateLimit-Remaining"] = str(int(remaining))
+        response.headers["X-RateLimit-Reset"] = str(int(now + reset_time))
+
+        # save updated state
+        rate_store[api_key]["tokens"] = tokens
+        rate_store[api_key]["last_refill"] = last_refill
+
+        return response
+
+    # ---------------- ALLOW CASE ----------------
+    tokens -= 1   # consume token
+
+    remaining = tokens
+
+    # time to full refill
+    reset_time = (capacity - tokens) / refill_rate if refill_rate > 0 else 0
+
+    # save updated state
+    rate_store[api_key]["tokens"] = tokens
+    rate_store[api_key]["last_refill"] = last_refill
+
+    # forward request
     response = await call_next(request)
+
+    # attach headers
+    response.headers["X-RateLimit-Limit"] = str(capacity)
+    response.headers["X-RateLimit-Remaining"] = str(int(remaining))
+    response.headers["X-RateLimit-Reset"] = str(int(now + reset_time))
+
     return response
 
-
-
-
-
+#auth middleware in place
 @app.middleware("http")
 async def auth_middleware(request:Request, call_next):
     key_header = request.headers.get("x-api-key")
@@ -94,7 +135,7 @@ async def auth_middleware(request:Request, call_next):
     request.state.tenant = tenant
     request.state.api_key=key_header
     response = await call_next(request)
-    return response 
+    return response
 
 
 
