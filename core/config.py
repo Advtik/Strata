@@ -23,6 +23,6 @@ rate_limit_config = {
     },
     "key2": {
         "refill_rate": 1,
-        "capacity": 5
+        "capacity": 10
     }
 }

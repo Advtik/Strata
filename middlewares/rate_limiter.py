@@ -2,7 +2,7 @@ import time
 from fastapi import Request, Response
 
 from core.config import rate_limit_config
-from core.state import rate_store
+from core.redis_client import r
 
 
 async def rate_limiter(request:Request, call_next):
@@ -25,17 +25,18 @@ async def rate_limiter(request:Request, call_next):
     refill_rate = rate_config["refill_rate"]
     capacity = rate_config["capacity"]
 
-    # get or initialize state
-    rate = rate_store.get(api_key)
-    if(rate is None):
-        rate = {
-            "tokens": capacity,          # start full
-            "last_refill": now
-        }
-        rate_store[api_key] = rate
+    key=f"rate:{api_key}"
 
-    tokens = rate["tokens"]
-    last_refill = rate["last_refill"]
+    #fetch from redis
+    data= r.hgetall(key)
+
+    if not data:
+        tokens=capacity
+        last_refill=now
+    else:
+        tokens = float(data.get("tokens", capacity))
+        last_refill = float(data.get("last_refill", now))
+
 
     #REFILL LOGIC
     elapsed = now - last_refill
@@ -58,8 +59,10 @@ async def rate_limiter(request:Request, call_next):
         response.headers["X-RateLimit-Reset"] = str(int(now + reset_time))
 
         # save updated state
-        rate_store[api_key]["tokens"] = tokens
-        rate_store[api_key]["last_refill"] = last_refill
+        r.hset(key,mapping={
+            "tokens": tokens,
+            "last_refill": last_refill
+        })
 
         return response
 
@@ -72,8 +75,11 @@ async def rate_limiter(request:Request, call_next):
     reset_time = (capacity - tokens) / refill_rate if refill_rate > 0 else 0
 
     # save updated state
-    rate_store[api_key]["tokens"] = tokens
-    rate_store[api_key]["last_refill"] = last_refill
+    r.hset(key,mapping={
+        "tokens": tokens,
+        "last_refill": last_refill
+    })
+    r.expire(key,3600*2)
 
     # forward request
     response = await call_next(request)
