@@ -1,6 +1,15 @@
 routes={
-    "echo":"http://postman-echo.com",
-    "json":"http://jsonplaceholder.typicode.com"
+    "echo": {
+        "backends": [
+            "http://postman-echo.com",
+            "https://httpbin.org"
+        ]
+    },
+    "json":{
+        "backends":[
+            "http://jsonplaceholder.typicode.com"
+        ]
+    }
 }
 
 tenants={
@@ -22,7 +31,7 @@ rate_limit_config = {
         "capacity": 10
     },
     "key2": {
-        "refill_rate": 1,
-        "capacity": 10
+        "refill_rate": 0.2,
+        "capacity": 5
     }
 }
