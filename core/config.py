@@ -2,7 +2,8 @@ routes={
     "echo": {
         "backends": [
             "http://postman-echo.com",
-            "https://httpbin.org"
+            "https://httpbin.org",
+            "http://fake-backend-12345.com"   # fake
         ]
     },
     "json":{
@@ -31,7 +32,7 @@ rate_limit_config = {
         "capacity": 10
     },
     "key2": {
-        "refill_rate": 0.2,
+        "refill_rate": 1,
         "capacity": 5
     }
 }

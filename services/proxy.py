@@ -3,6 +3,7 @@ import random
 from fastapi import Request, Response
 
 from core.config import routes
+from core.health import health_status
 
 
 async def proxy_handler(pref:str,full_path:str,request:Request):
@@ -24,8 +25,31 @@ async def proxy_handler(pref:str,full_path:str,request:Request):
     if not backend_list:
         return Response(content="No backend available", status_code=502)
     
-    backends=backend_list.copy()
-    random.shuffle(backends)
+    healthy_backends = []
+    unhealthy_backends = []
+
+    route_health = health_status.get(pref,{})
+
+    for backend in backend_list:
+        state = route_health.get(backend)
+
+        if state is None:
+            # not yet checked → assume healthy
+            healthy_backends.append(backend)
+        elif state["healthy"]:
+            healthy_backends.append(backend)
+        else:
+            unhealthy_backends.append(backend)
+
+    print("Healthy:", healthy_backends)
+    print("Unhealthy:", unhealthy_backends)
+    # priority order
+    backends = healthy_backends + unhealthy_backends
+
+    # still randomize inside each group
+    random.shuffle(healthy_backends)
+    random.shuffle(unhealthy_backends)
+    backends = healthy_backends + unhealthy_backends
 
     headers=dict(request.headers)
     headers.pop("host", None)
