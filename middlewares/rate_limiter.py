@@ -2,9 +2,10 @@ import time
 from fastapi import Request, Response
 import redis.exceptions
 
-from core.config import rate_limit_config
 from core.redis_client import r
 from typing import List,cast
+
+from core.repository import get_rate_limit_by_api_key
 
 
 RATE_LIMIT_SCRIPT = """
@@ -60,14 +61,11 @@ async def rate_limiter(request:Request, call_next):
     if api_key is None:
         return Response(content="Missing API Key", status_code=401)
 
-    # get config
-    rate_config = rate_limit_config.get(api_key)
+    rate_config = await get_rate_limit_by_api_key(api_key)
+
     if rate_config is None:
-        rate_config = {
-            "refill_rate": 5,
-            "capacity": 30
-        }
-        rate_limit_config[api_key] = rate_config
+        # fallback (fail open)
+         return await call_next(request)
 
     refill_rate = rate_config["refill_rate"]
     capacity = rate_config["capacity"]

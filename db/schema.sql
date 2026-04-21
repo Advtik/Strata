@@ -1,0 +1,45 @@
+CREATE TABLE tenants (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE routes (
+    id SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+);
+
+
+CREATE TABLE backends (
+    id SERIAL PRIMARY KEY,
+    route_id INTEGER NOT NULL,
+    url TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE
+);
+
+
+CREATE TABLE api_keys (
+    id SERIAL PRIMARY KEY,
+    key TEXT UNIQUE NOT NULL,
+    tenant_id INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+);
+
+
+CREATE TABLE rate_limits (
+    id SERIAL PRIMARY KEY,
+    api_key_id INTEGER UNIQUE NOT NULL,
+    refill_rate FLOAT NOT NULL,
+    capacity INTEGER NOT NULL,
+
+    FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE CASCADE
+);

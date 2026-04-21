@@ -2,20 +2,20 @@ import httpx
 import random
 from fastapi import Request, Response
 
-from core.config import routes
 from core.health import health_status
+from core.circuit import can_request, record_success, record_failure
+from core.repository import get_routes_for_tenant
 
 
 async def proxy_handler(pref:str,full_path:str,request:Request):
     query_params=request.query_params
     tenant=request.state.tenant
-    print(request.headers)
+
     print("PROXY HIT")
     print(pref)
     print("tenant ",tenant)
 
-    if(pref not in tenant["routes"]):
-        return Response(content="route not allowed", status_code=403)
+    routes = await get_routes_for_tenant(tenant["id"])
     
     route=routes.get(pref)
     if route is None:
@@ -30,11 +30,17 @@ async def proxy_handler(pref:str,full_path:str,request:Request):
 
     route_health = health_status.get(pref,{})
 
+    # 🔍 classify backends
     for backend in backend_list:
-        state = route_health.get(backend)
+        backend_url=backend["url"]
+        state = route_health.get(backend_url)
+
+        # 🚫 circuit breaker check
+        if not can_request(backend):
+            print("Circuit OPEN, skipping:", backend_url)
+            continue
 
         if state is None:
-            # not yet checked → assume healthy
             healthy_backends.append(backend)
         elif state["healthy"]:
             healthy_backends.append(backend)
@@ -43,24 +49,34 @@ async def proxy_handler(pref:str,full_path:str,request:Request):
 
     print("Healthy:", healthy_backends)
     print("Unhealthy:", unhealthy_backends)
-    # priority order
-    backends = healthy_backends + unhealthy_backends
 
-    # still randomize inside each group
-    random.shuffle(healthy_backends)
-    random.shuffle(unhealthy_backends)
-    backends = healthy_backends + unhealthy_backends
+    # 🎯 fail-open fallback (VERY IMPORTANT)
+    if not healthy_backends and not unhealthy_backends:
+        print("All circuits open → fallback to all backends")
+        backends = backend_list.copy()
+        random.shuffle(backends)
+    else:
+        # 🎯 priority: healthy first
+        random.shuffle(healthy_backends)
+        random.shuffle(unhealthy_backends)
+        backends = healthy_backends + unhealthy_backends
 
+    # 🧼 clean headers
     headers=dict(request.headers)
     headers.pop("host", None)
     headers.pop("content-length", None)
     headers.pop("connection", None)
+
     body=await request.body()
+
+    # 🔁 retry loop
     for backend in backends:
-        target_url = f"{backend.rstrip('/')}/{full_path}"
+        target_url = f"{backend['url'].rstrip('/')}/{full_path}"
+
+        print("Trying backend:", backend["url"])
 
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.request(
                     method=request.method,
                     url=target_url,
@@ -69,7 +85,15 @@ async def proxy_handler(pref:str,full_path:str,request:Request):
                     content=body
                 )
 
-            
+            # 🚨 treat 5xx as failure
+            if response.status_code >= 500:
+                record_failure(backend)
+                print("Server error from backend:", backend["url"])
+                continue
+
+            # ✅ success
+            record_success(backend)
+
             excluded = {
                 "content-length",
                 "transfer-encoding",
@@ -82,8 +106,8 @@ async def proxy_handler(pref:str,full_path:str,request:Request):
                 if k.lower() not in excluded:
                     resp_headers[k] = v
 
-            print("Trying backend:", backend)
             print("Upstream status:", response.status_code)
+
             return Response(
                 content=response.content,
                 status_code=response.status_code,
@@ -91,9 +115,8 @@ async def proxy_handler(pref:str,full_path:str,request:Request):
             )
 
         except httpx.RequestError:
-            continue  # try next backend
+            record_failure(backend)
+            print("Failed backend:", backend["url"])
+            continue
 
-    
     return Response(content="All upstreams failed", status_code=502)
-
-        

@@ -1,14 +1,14 @@
 routes={
     "echo": {
         "backends": [
-            "http://postman-echo.com",
-            "https://httpbin.org",
-            "http://fake-backend-12345.com"   # fake
+            {"url":"http://postman-echos.com"},
+            {"url":"https://httpbins.org"},
+            {"url":"http://127.0.0.1:9000"}
         ]
     },
     "json":{
         "backends":[
-            "http://jsonplaceholder.typicode.com"
+            {"url":"http://jsonplaceholder.typicode.com"}
         ]
     }
 }
