@@ -1,4 +1,5 @@
 cache = {
     "routes": {},
-    "rate_limits": {}
+    "rate_limits": {},
+    "tenants": {}
 }

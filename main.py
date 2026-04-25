@@ -9,15 +9,20 @@ import asyncio
 from contextlib import asynccontextmanager
 from db.connect import db
 from core.repository import get_tenant_by_api_key
+from core.cache_loader import load_all_cache, cache_refresher
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # start background task
-    task = asyncio.create_task(health_checker())
 
     #database connection
     await db.connect()
     print("db connected")
+    task = asyncio.create_task(health_checker())
+
+    await load_all_cache()
+    asyncio.create_task(cache_refresher())
     
     yield
     

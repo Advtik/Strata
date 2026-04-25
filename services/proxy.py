@@ -5,6 +5,7 @@ from fastapi import Request, Response
 from core.health import health_status
 from core.circuit import can_request, record_success, record_failure
 from core.repository import get_routes_for_tenant
+from core.cache import cache 
 
 
 async def proxy_handler(pref:str,full_path:str,request:Request):
@@ -15,7 +16,9 @@ async def proxy_handler(pref:str,full_path:str,request:Request):
     print(pref)
     print("tenant ",tenant)
 
-    routes = await get_routes_for_tenant(tenant["id"])
+    routes = cache["routes"].get(tenant["id"])
+    if(routes is None):
+        return Response(content="No routes for tenant", status_code=404)
     
     route=routes.get(pref)
     if route is None:

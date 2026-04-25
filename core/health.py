@@ -9,7 +9,6 @@ health_status = {}
 FAILURE_THRESHOLD = 3
 SUCCESS_THRESHOLD = 2
 
-# ✅ single reusable client (important)
 client = httpx.AsyncClient(timeout=10.0)
 
 
@@ -25,50 +24,54 @@ async def health_checker():
     global health_status
 
     while True:
-        # ✅ DB safety check
-        if db.pool is None:
-            print("DB not ready, skipping health check...")
-            await asyncio.sleep(5)
-            continue
+        try:
+            if db.pool is None:
+                print("DB not ready, skipping health check...")
+                await asyncio.sleep(5)
+                continue
 
-        backend_map = await get_all_backends()
+            backend_map = await get_all_backends()
 
-        for route_name, backends in backend_map.items():
-            if route_name not in health_status:
-                health_status[route_name] = {}
+            for tenant_id, routes in backend_map.items():
 
-            # ✅ run checks in parallel
-            tasks = [check_backend(b) for b in backends]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+                for route_name, backends in routes.items():  # ✅ FIXED
 
-            for backend, result in zip(backends, results):
-                backend_url = backend['url']
+                    if route_name not in health_status:
+                        health_status[route_name] = {}
 
-                if backend_url not in health_status[route_name]:
-                    health_status[route_name][backend_url] = {
-                        "healthy": True,
-                        "failures": 0,
-                        "successes": 0
-                    }
+                    tasks = [check_backend(b) for b in backends]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                state = health_status[route_name][backend_url]
+                    for backend, result in zip(backends, results):
+                        backend_url = backend['url']
 
-                # handle exceptions as failure
-                is_healthy = False if isinstance(result, Exception) else result
+                        if backend_url not in health_status[route_name]:
+                            health_status[route_name][backend_url] = {
+                                "healthy": True,
+                                "failures": 0,
+                                "successes": 0
+                            }
 
-                if not is_healthy:
-                    state["failures"] += 1
-                    state["successes"] = 0
+                        state = health_status[route_name][backend_url]
 
-                    if state["failures"] >= FAILURE_THRESHOLD:
-                        state["healthy"] = False
-                else:
-                    state["successes"] += 1
-                    state["failures"] = 0
+                        is_healthy = False if isinstance(result, Exception) else result
 
-                    if state["successes"] >= SUCCESS_THRESHOLD:
-                        state["healthy"] = True
+                        if not is_healthy:
+                            state["failures"] += 1
+                            state["successes"] = 0
 
-        print("health:", health_status)
+                            if state["failures"] >= FAILURE_THRESHOLD:
+                                state["healthy"] = False
+                        else:
+                            state["successes"] += 1
+                            state["failures"] = 0
+
+                            if state["successes"] >= SUCCESS_THRESHOLD:
+                                state["healthy"] = True
+
+            print("health:", health_status)
+
+        except Exception as e:
+            print("Health checker error:", e)
 
         await asyncio.sleep(30)

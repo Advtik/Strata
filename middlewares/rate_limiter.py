@@ -5,7 +5,7 @@ import redis.exceptions
 from core.redis_client import r
 from typing import List,cast
 
-from core.repository import get_rate_limit_by_api_key
+from core.cache import cache
 
 
 RATE_LIMIT_SCRIPT = """
@@ -61,7 +61,7 @@ async def rate_limiter(request:Request, call_next):
     if api_key is None:
         return Response(content="Missing API Key", status_code=401)
 
-    rate_config = await get_rate_limit_by_api_key(api_key)
+    rate_config = cache["rate_limits"].get(api_key)
 
     if rate_config is None:
         # fallback (fail open)
