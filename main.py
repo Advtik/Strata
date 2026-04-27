@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from db.connect import db
 from core.repository import get_tenant_by_api_key
 from core.cache_loader import load_all_cache, cache_refresher
+from core.metrics import get_metrics
 
 
 @asynccontextmanager
@@ -43,6 +44,10 @@ app = FastAPI(lifespan=lifespan)
 async def test_tenant():
     data = await get_tenant_by_api_key("test123")
     return data
+
+@app.get("/metrics")
+async def metrics():
+    return get_metrics()
 
 app.middleware("http")(rate_limiter)
 app.middleware("http")(auth_middleware)

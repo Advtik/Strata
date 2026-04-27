@@ -6,6 +6,7 @@ from core.redis_client import r
 from typing import List,cast
 
 from core.cache import cache
+from core.metrics import record_metric
 
 
 RATE_LIMIT_SCRIPT = """
@@ -56,6 +57,13 @@ RATE_LIMIT_SHA = cast(str, r.script_load(RATE_LIMIT_SCRIPT))
 async def rate_limiter(request:Request, call_next):
     now = time.time()
 
+    path_parts = request.url.path.split("/")
+    pref = path_parts[2] if len(path_parts) > 2 else "unknown"
+    
+    tenant = getattr(request.state, "tenant", None)
+    if tenant is None:
+        return Response(content="No tenant", status_code=402)
+
     # get api key
     api_key = getattr(request.state, "api_key", None)
     if api_key is None:
@@ -104,6 +112,12 @@ async def rate_limiter(request:Request, call_next):
 
     # BLOCK
     if allowed == 0:
+        record_metric(
+            tenant_id=tenant["id"],
+            route_name=pref,
+            latency=0,
+            status="blocked"
+        )
         response = Response(content="Too many requests", status_code=429)
         response.headers["X-RateLimit-Limit"] = str(capacity)
         response.headers["X-RateLimit-Remaining"] = "0"

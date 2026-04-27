@@ -6,6 +6,8 @@ from core.health import health_status
 from core.circuit import can_request, record_success, record_failure
 from core.repository import get_routes_for_tenant
 from core.cache import cache 
+from core.metrics import record_metric
+import time
 
 
 async def proxy_handler(pref:str,full_path:str,request:Request):
@@ -16,6 +18,7 @@ async def proxy_handler(pref:str,full_path:str,request:Request):
     print(pref)
     print("tenant ",tenant)
 
+    start_time =time.time()
     routes = cache["routes"].get(tenant["id"])
     if(routes is None):
         return Response(content="No routes for tenant", status_code=404)
@@ -111,6 +114,15 @@ async def proxy_handler(pref:str,full_path:str,request:Request):
 
             print("Upstream status:", response.status_code)
 
+            latency = time.time() - start_time
+
+            record_metric(
+                tenant_id=tenant["id"],
+                route_name=pref,
+                latency=latency,
+                status="allowed"
+            )
+
             return Response(
                 content=response.content,
                 status_code=response.status_code,
@@ -121,5 +133,14 @@ async def proxy_handler(pref:str,full_path:str,request:Request):
             record_failure(backend)
             print("Failed backend:", backend["url"])
             continue
+
+    latency = time.time() - start_time
+
+    record_metric(
+        tenant_id=tenant["id"],
+        route_name=pref,
+        latency=latency,
+        status="failure"
+    )
 
     return Response(content="All upstreams failed", status_code=502)
