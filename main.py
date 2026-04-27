@@ -11,6 +11,7 @@ from db.connect import db
 from core.repository import get_tenant_by_api_key
 from core.cache_loader import load_all_cache, cache_refresher
 from core.metrics import get_metrics
+from core.backend_metrics import backend_metrics
 
 
 @asynccontextmanager
@@ -48,6 +49,10 @@ async def test_tenant():
 @app.get("/metrics")
 async def metrics():
     return get_metrics()
+
+@app.get("/backend-metrics")
+async def get_backend_metrics():
+    return backend_metrics
 
 app.middleware("http")(rate_limiter)
 app.middleware("http")(auth_middleware)

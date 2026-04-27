@@ -68,7 +68,6 @@ async def load_all_cache():
     await load_routes_cache()
     await load_rate_limits_cache()
     await load_tenants_cache() 
-    print("cache",cache)
 
 
 # ----------------------------
@@ -78,7 +77,6 @@ async def cache_refresher():
     while True:
         try:
             await load_all_cache()
-            print("cache",cache)
         except Exception as e:
             # ❗ VERY IMPORTANT: never let loop crash
             print("Cache refresh failed:", e)

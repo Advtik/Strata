@@ -1,5 +1,4 @@
 from fastapi import Request, Response
-from core.config import tenants
 from core.repository import get_tenant_by_api_key
 from core.cache import cache
 
