@@ -3,13 +3,28 @@ import httpx
 
 from core.repository import get_all_backends
 from db.connect import db
-
-health_status = {}
+from core.redis_client import r
 
 FAILURE_THRESHOLD = 3
 SUCCESS_THRESHOLD = 2
 
 client = httpx.AsyncClient(timeout=10.0)
+
+
+# ✅ NOW USE IDS
+def _get_key(route_id: int, backend_id: int) -> str:
+    return f"health:{route_id}:{backend_id}"
+
+
+def init_health(route_id: int, backend_id: int):
+    key = _get_key(route_id, backend_id)
+
+    if not r.exists(key):
+        r.hset(key, mapping={
+            "healthy": "1",
+            "failures": 0,
+            "successes": 0
+        })
 
 
 async def check_backend(backend):
@@ -21,8 +36,6 @@ async def check_backend(backend):
 
 
 async def health_checker():
-    global health_status
-
     while True:
         try:
             if db.pool is None:
@@ -34,44 +47,52 @@ async def health_checker():
 
             for tenant_id, routes in backend_map.items():
 
-                for route_name, backends in routes.items():  # ✅ FIXED
+                # ✅ FIXED LOOP STRUCTURE
+                for route_name, route_data in routes.items():
 
-                    if route_name not in health_status:
-                        health_status[route_name] = {}
+                    route_id = route_data["route_id"]
+                    backends = route_data["backends"]
 
                     tasks = [check_backend(b) for b in backends]
                     results = await asyncio.gather(*tasks, return_exceptions=True)
 
                     for backend, result in zip(backends, results):
-                        backend_url = backend['url']
+                        backend_id = backend["id"]
+                        key = _get_key(route_id, backend_id)
 
-                        if backend_url not in health_status[route_name]:
-                            health_status[route_name][backend_url] = {
-                                "healthy": True,
-                                "failures": 0,
-                                "successes": 0
-                            }
-
-                        state = health_status[route_name][backend_url]
+                        init_health(route_id, backend_id)
 
                         is_healthy = False if isinstance(result, Exception) else result
 
                         if not is_healthy:
-                            state["failures"] += 1
-                            state["successes"] = 0
+                            r.hincrby(key, "failures", 1)
+                            r.hset(key, "successes", 0)
 
-                            if state["failures"] >= FAILURE_THRESHOLD:
-                                state["healthy"] = False
+                            failures = int(r.hget(key, "failures") or 0)
+
+                            if failures >= FAILURE_THRESHOLD:
+                                r.hset(key, "healthy", "0")
+
                         else:
-                            state["successes"] += 1
-                            state["failures"] = 0
+                            r.hincrby(key, "successes", 1)
+                            r.hset(key, "failures", 0)
 
-                            if state["successes"] >= SUCCESS_THRESHOLD:
-                                state["healthy"] = True
+                            successes = int(r.hget(key, "successes") or 0)
 
-            print("health:", health_status)
+                            if successes >= SUCCESS_THRESHOLD:
+                                r.hset(key, "healthy", "1")
+
+            print("health updated")
 
         except Exception as e:
             print("Health checker error:", e)
 
         await asyncio.sleep(30)
+
+
+# ✅ UPDATED HELPER
+def is_backend_healthy(route_id: int, backend_id: int) -> bool:
+    key = _get_key(route_id, backend_id)
+    val = r.hget(key, "healthy")
+
+    return val == "1"

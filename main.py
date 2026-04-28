@@ -11,8 +11,7 @@ from db.connect import db
 from core.repository import get_tenant_by_api_key
 from core.cache_loader import load_all_cache, cache_refresher
 from core.metrics import get_metrics
-from core.backend_metrics import backend_metrics
-
+from core.redis_client import r
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -52,7 +51,33 @@ async def metrics():
 
 @app.get("/backend-metrics")
 async def get_backend_metrics():
-    return backend_metrics
+    keys = r.keys("backend:*")
+
+    result = {}
+
+    for key in keys:
+        key_str = key.decode() if isinstance(key, bytes) else key
+
+        # ✅ NEW FORMAT: backend:route_id:backend_id
+        try:
+            _, route_id, backend_id = key_str.split(":")
+        except ValueError:
+            continue  # skip malformed keys
+
+        data = r.hgetall(key)
+
+        clean_data = {
+            (k.decode() if isinstance(k, bytes) else k):
+            (v.decode() if isinstance(v, bytes) else v)
+            for k, v in data.items()
+        }
+
+        if route_id not in result:
+            result[route_id] = {}
+
+        result[route_id][backend_id] = clean_data
+
+    return result
 
 app.middleware("http")(rate_limiter)
 app.middleware("http")(auth_middleware)

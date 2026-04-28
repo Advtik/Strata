@@ -1,10 +1,9 @@
 from fastapi import Request, Response
-from core.repository import get_tenant_by_api_key
 from core.cache import cache
 
 
-#auth middleware in place
-async def auth_middleware(request:Request, call_next):
+# auth middleware
+async def auth_middleware(request: Request, call_next):
     key_header = request.headers.get("x-api-key")
 
     if key_header is None:
@@ -15,11 +14,18 @@ async def auth_middleware(request:Request, call_next):
     if tenant is None:
         return Response(content="Invalid API Key", status_code=401)
 
-        
-        
     print(tenant["name"])
-    request.state.tenant = tenant
-    request.state.api_key=key_header
+
+    # ✅ structured state (clean)
+    request.state.tenant = {
+        "id": tenant["tenant_id"],
+        "name": tenant["name"]
+    }
+
+    request.state.api_key = key_header
+
+    # 🔥 IMPORTANT (NEW)
+    request.state.api_key_id = tenant["api_key_id"]
+
     response = await call_next(request)
     return response
-

@@ -1,13 +1,16 @@
 import asyncio
-from importlib.abc import Loader
 
-from core.repository import get_all_backends, get_all_rate_limits,get_all_api_keys
+from core.repository import (
+    get_all_backends,
+    get_all_rate_limits,
+    get_all_api_keys
+)
 from core.cache import cache
 from db.connect import db
 
 
 # ----------------------------
-# ROUTES CACHE LOADER
+# ROUTES CACHE LOADER (FIXED)
 # ----------------------------
 async def load_routes_cache():
     if db.pool is None:
@@ -21,15 +24,18 @@ async def load_routes_cache():
     for tenant_id, routes in backend_map.items():
         routes_cache[tenant_id] = {}
 
-        for route_name, backends in routes.items():
+        for route_name, route_data in routes.items():
+            # ✅ KEEP FULL STRUCTURE (IMPORTANT)
             routes_cache[tenant_id][route_name] = {
-                "backends": backends
+                "route_id": route_data["route_id"],
+                "backends": route_data["backends"]
             }
 
-    # ✅ atomic replace (important)
     cache["routes"] = routes_cache
 
     print("Routes cache updated")
+    # DEBUG (remove later)
+    print("ROUTES CACHE:", cache["routes"])
 
 
 # ----------------------------
@@ -42,23 +48,33 @@ async def load_rate_limits_cache():
 
     rate_limits = await get_all_rate_limits()
 
-    # ✅ atomic replace
     cache["rate_limits"] = rate_limits
 
     print("Rate limits cache updated")
+    print("RATE LIMIT CACHE:", cache["rate_limits"])
 
 
-# ------------------------
-# TENANT LOADER 
-# ------------------------
+# ----------------------------
+# TENANTS CACHE LOADER (FIXED STRUCTURE)
+# ----------------------------
 async def load_tenants_cache():
     if db.pool is None:
         return
 
     tenants = await get_all_api_keys()
+
+    # already in correct format:
+    # {
+    #   api_key: {
+    #       tenant_id,
+    #       name,
+    #       api_key_id
+    #   }
+    # }
     cache["tenants"] = tenants
 
     print("Tenants cache updated")
+    print("TENANTS CACHE:", cache["tenants"])
 
 
 # ----------------------------
@@ -67,7 +83,7 @@ async def load_tenants_cache():
 async def load_all_cache():
     await load_routes_cache()
     await load_rate_limits_cache()
-    await load_tenants_cache() 
+    await load_tenants_cache()
 
 
 # ----------------------------
@@ -78,7 +94,6 @@ async def cache_refresher():
         try:
             await load_all_cache()
         except Exception as e:
-            # ❗ VERY IMPORTANT: never let loop crash
             print("Cache refresh failed:", e)
 
-        await asyncio.sleep(10)   # refresh interval
+        await asyncio.sleep(10)

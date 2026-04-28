@@ -43,3 +43,11 @@ CREATE TABLE rate_limits (
 
     FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE CASCADE
 );
+
+CREATE TABLE route_rate_limits (
+    id SERIAL PRIMARY KEY,
+    route_id INTEGER UNIQUE NOT NULL,
+    refill_rate FLOAT NOT NULL,
+    capacity INTEGER NOT NULL,
+    FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE
+);
