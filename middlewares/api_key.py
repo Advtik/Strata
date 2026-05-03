@@ -4,6 +4,12 @@ from core.cache import cache
 
 # auth middleware
 async def auth_middleware(request: Request, call_next):
+
+    #for github oauth
+    if request.url.path.startswith("/auth") or request.url.path.startswith("/api"):
+        return await call_next(request)
+    
+
     key_header = request.headers.get("x-api-key")
 
     if key_header is None:
@@ -16,7 +22,7 @@ async def auth_middleware(request: Request, call_next):
 
     print(tenant["name"])
 
-    # ✅ structured state (clean)
+    #structured state 
     request.state.tenant = {
         "id": tenant["tenant_id"],
         "name": tenant["name"]
@@ -24,7 +30,6 @@ async def auth_middleware(request: Request, call_next):
 
     request.state.api_key = key_header
 
-    # 🔥 IMPORTANT (NEW)
     request.state.api_key_id = tenant["api_key_id"]
 
     response = await call_next(request)

@@ -51,3 +51,17 @@ CREATE TABLE route_rate_limits (
     capacity INTEGER NOT NULL,
     FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE
 );
+
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    github_id TEXT UNIQUE NOT NULL,
+    username TEXT NOT NULL,
+    avatar_url TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE tenants ADD COLUMN user_id INTEGER;
+
+ALTER TABLE tenants
+ADD CONSTRAINT fk_user
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;

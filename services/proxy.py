@@ -29,7 +29,7 @@ async def proxy_handler(pref: str, full_path: str, request: Request):
     if route is None:
         return Response(content="Route not found", status_code=404)
 
-    # ✅ NEW (extract route_id)
+    # NEW (extract route_id)
     route_id = route["route_id"]
 
     backend_list = route["backends"]
@@ -48,7 +48,7 @@ async def proxy_handler(pref: str, full_path: str, request: Request):
             print("Circuit OPEN, skipping:", backend_url)
             continue
 
-        # ✅ UPDATED (use IDs)
+        # UPDATED (use IDs)
         if is_backend_healthy(route_id, backend["id"]):
             healthy_backends.append(backend)
         else:
@@ -57,14 +57,14 @@ async def proxy_handler(pref: str, full_path: str, request: Request):
     print("Healthy:", healthy_backends)
     print("Unhealthy:", unhealthy_backends)
 
-    # 🎯 fallback logic
+    #  fallback logic
     if not healthy_backends and not unhealthy_backends:
         print("All circuits open → fallback to all backends")
         backends = backend_list.copy()
     else:
         backends = healthy_backends + unhealthy_backends
 
-    # 🧼 clean headers
+    # clean headers
     headers = dict(request.headers)
     headers.pop("host", None)
     headers.pop("content-length", None)
@@ -72,19 +72,19 @@ async def proxy_handler(pref: str, full_path: str, request: Request):
 
     body = await request.body()
 
-    # ✅ reuse client
+    # reuse client
     async with httpx.AsyncClient(timeout=5.0) as client:
 
-        # 🔁 smart retry loop
+        # smart retry loop
         tried = set()
 
         while len(tried) < len(backends):
-            # ✅ UPDATED (use route_id)
+            # UPDATED (use route_id)
             backend = pick_best_backend(route_id, backends)
             if not backend:
                 return Response("No backends detected", status_code=402)
 
-            # ✅ UPDATED (use IDs)
+            # UPDATED (use IDs)
             score = get_backend_score(route_id, backend["id"])
             print(f"Picked backend: {backend['url']} | Score: {score}")
 
@@ -120,11 +120,10 @@ async def proxy_handler(pref: str, full_path: str, request: Request):
 
                 backend_latency = time.time() - backend_start
 
-                # 🚨 treat 5xx as failure
+                # treat 5xx as failure
                 if response.status_code >= 500:
                     record_failure(route_id,backend["id"])
 
-                    # ✅ UPDATED (use IDs)
                     record_backend_failure(
                         route_id=route_id,
                         backend_id=backend["id"]
@@ -133,10 +132,10 @@ async def proxy_handler(pref: str, full_path: str, request: Request):
                     print("Server error from backend:", backend_url)
                     continue
 
-                # ✅ success
+                #success
                 record_success(route_id, backend["id"])
 
-                # ✅ UPDATED (use IDs)
+                # using ID
                 record_backend_success(
                     route_id=route_id,
                     backend_id=backend["id"],
@@ -161,7 +160,7 @@ async def proxy_handler(pref: str, full_path: str, request: Request):
 
                 record_metric(
                     tenant_id=tenant["id"],
-                    route_id=route_id,   # ✅ use ID
+                    route_id=route_id,   #use ID
                     latency=total_latency,
                     status="allowed"
                 )
@@ -175,7 +174,7 @@ async def proxy_handler(pref: str, full_path: str, request: Request):
             except httpx.RequestError:
                 record_failure(route_id, backend["id"])
 
-                # ✅ UPDATED (use IDs)
+                # UPDATED (use IDs)
                 record_backend_failure(
                     route_id=route_id,
                     backend_id=backend["id"]
@@ -184,7 +183,7 @@ async def proxy_handler(pref: str, full_path: str, request: Request):
                 print("Failed backend:", backend_url)
                 continue
 
-    # ❌ all backends failed
+    #all backends failed
     total_latency = time.time() - start_time
 
     record_metric(

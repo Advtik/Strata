@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from middlewares.auth import auth_middleware
+from middlewares.api_key import auth_middleware
 from middlewares.rate_limiter import rate_limiter
 from middlewares.logging import middleman
 from services.proxy import proxy_handler
@@ -12,6 +12,14 @@ from core.repository import get_tenant_by_api_key
 from core.cache_loader import load_all_cache, cache_refresher
 from core.metrics import get_metrics
 from core.redis_client import r
+
+from routes.user_auth_route import router as auth_router
+from middlewares.user_auth import user_middleware
+
+from routes.project_route import router as project_router
+
+from routes.api_key_route import router as api_key_router
+from routes.rate_limit_route import router as rate_limit_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -79,9 +87,16 @@ async def get_backend_metrics():
 
     return result
 
+
+app.include_router(auth_router, prefix="/auth")
+app.include_router(project_router, prefix="/api/projects")
+app.include_router(api_key_router, prefix="/api/keys")
+app.include_router(rate_limit_router, prefix="/api/rate-limit")
+
 app.middleware("http")(rate_limiter)
 app.middleware("http")(auth_middleware)
 app.middleware("http")(middleman)
+app.middleware("http")(user_middleware)
 
 
 app.api_route(

@@ -3,7 +3,7 @@ from typing import Dict
 from core.redis_client import r
 
 
-# ✅ ID-based key
+# ID-based key
 def _get_key(route_id: int, backend_id: int) -> str:
     return f"backend:{route_id}:{backend_id}"
 
@@ -90,7 +90,7 @@ def get_backend_score(route_id: int, backend_id: int) -> float:
 
     # decay
     recent_requests *= 0.9
-    r.hset(key, "recent_requests", str(recent_requests))  # ✅ string
+    r.hset(key, "recent_requests", str(recent_requests))  # string
 
     failure_rate = failures / requests if requests > 0 else 0.0
 

@@ -50,6 +50,11 @@ RATE_LIMIT_SHA = cast(str, r.script_load(RATE_LIMIT_SCRIPT))
 
 
 async def rate_limiter(request: Request, call_next):
+
+    #for github oauth
+    if request.url.path.startswith("/auth")  or request.url.path.startswith("/api"):
+        return await call_next(request)
+    
     now = time.time()
 
     path_parts = request.url.path.split("/")
@@ -63,7 +68,7 @@ async def rate_limiter(request: Request, call_next):
     if api_key is None:
         return Response(content="Missing API Key", status_code=401)
 
-    # ✅ NEW (use stable ID)
+    #api key id
     api_key_id = getattr(request.state, "api_key_id", None)
     if api_key_id is None:
         return Response(content="Missing API Key ID", status_code=401)
@@ -72,9 +77,8 @@ async def rate_limiter(request: Request, call_next):
     if rate_config is None:
         return Response(content="No Rate limits found", status_code=404)
 
-    # ------------------------
+
     # GET route_id FROM CACHE
-    # ------------------------
     routes = cache["routes"].get(tenant["id"])
     if routes is None:
         return Response(content="No routes for tenant", status_code=404)
@@ -85,9 +89,7 @@ async def rate_limiter(request: Request, call_next):
 
     route_id = route["route_id"]
 
-    # ------------------------
     # CONFIG
-    # ------------------------
     global_config = rate_config["global"]
 
     route_config = rate_config["routes"].get(route_id)
@@ -132,9 +134,7 @@ async def rate_limiter(request: Request, call_next):
     except Exception:
         return await call_next(request)
 
-    # ------------------------
     # RESET TIME CALCULATION
-    # ------------------------
     def get_reset_time(tokens, refill_rate, capacity):
         if refill_rate > 0:
             if tokens < 1:
@@ -155,9 +155,7 @@ async def rate_limiter(request: Request, call_next):
         route_config["capacity"]
     )
 
-    # ------------------------
     # FINAL DECISION
-    # ------------------------
     if global_allowed == 0 or route_allowed == 0:
 
         record_metric(
@@ -195,9 +193,7 @@ async def rate_limiter(request: Request, call_next):
 
         return response
 
-    # ------------------------
     # ALLOW
-    # ------------------------
     response = await call_next(request)
 
     effective_limit = min(global_config["capacity"], route_config["capacity"])

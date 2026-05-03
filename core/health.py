@@ -11,7 +11,7 @@ SUCCESS_THRESHOLD = 2
 client = httpx.AsyncClient(timeout=10.0)
 
 
-# ✅ NOW USE IDS
+# NOW USE IDS
 def _get_key(route_id: int, backend_id: int) -> str:
     return f"health:{route_id}:{backend_id}"
 
@@ -47,7 +47,6 @@ async def health_checker():
 
             for tenant_id, routes in backend_map.items():
 
-                # ✅ FIXED LOOP STRUCTURE
                 for route_name, route_data in routes.items():
 
                     route_id = route_data["route_id"]
@@ -90,7 +89,7 @@ async def health_checker():
         await asyncio.sleep(30)
 
 
-# ✅ UPDATED HELPER
+#  HELPER
 def is_backend_healthy(route_id: int, backend_id: int) -> bool:
     key = _get_key(route_id, backend_id)
     val = r.hget(key, "healthy")

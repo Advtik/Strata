@@ -4,6 +4,11 @@ from fastapi import Request
 
 
 async def middleman(request:Request, call_next):
+
+    #for github oauth
+    if request.url.path.startswith("/auth")  or request.url.path.startswith("/api"):
+        return await call_next(request)
+    
     start_time = time.perf_counter()
     # print((request.headers))
     try:

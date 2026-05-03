@@ -9,9 +9,8 @@ from core.cache import cache
 from db.connect import db
 
 
-# ----------------------------
+
 # ROUTES CACHE LOADER (FIXED)
-# ----------------------------
 async def load_routes_cache():
     if db.pool is None:
         print("DB not ready, retrying...")
@@ -38,9 +37,7 @@ async def load_routes_cache():
     print("ROUTES CACHE:", cache["routes"])
 
 
-# ----------------------------
 # RATE LIMIT CACHE LOADER
-# ----------------------------
 async def load_rate_limits_cache():
     if db.pool is None:
         print("DB not ready, retrying...")
@@ -54,9 +51,7 @@ async def load_rate_limits_cache():
     print("RATE LIMIT CACHE:", cache["rate_limits"])
 
 
-# ----------------------------
 # TENANTS CACHE LOADER (FIXED STRUCTURE)
-# ----------------------------
 async def load_tenants_cache():
     if db.pool is None:
         return
@@ -77,18 +72,16 @@ async def load_tenants_cache():
     print("TENANTS CACHE:", cache["tenants"])
 
 
-# ----------------------------
+
 # LOAD EVERYTHING
-# ----------------------------
 async def load_all_cache():
     await load_routes_cache()
     await load_rate_limits_cache()
     await load_tenants_cache()
 
 
-# ----------------------------
+
 # BACKGROUND REFRESH LOOP
-# ----------------------------
 async def cache_refresher():
     while True:
         try:

@@ -20,9 +20,7 @@ def record_metric(tenant_id, route_id, latency, status):
     key = _metrics_key(tenant_id, route_id)
     ts_key = _timestamps_key(tenant_id, route_id)
 
-    # -------------------------
     # initialize route (same logic)
-    # -------------------------
     if not r.exists(key):
         r.hset(key, mapping={
             "total_requests": 0,
@@ -32,14 +30,11 @@ def record_metric(tenant_id, route_id, latency, status):
             "total_latency": 0.0
         })
 
-    # -------------------------
     # update metrics
-    # -------------------------
     r.hincrby(key, "total_requests", 1)
 
-    # -------------------------
-    # timestamps logic (SAME as your list logic)
-    # -------------------------
+    
+    # timestamps logic 
     last = r.lindex(ts_key, -1)
     if last:
         last = json.loads(last)
@@ -53,7 +48,7 @@ def record_metric(tenant_id, route_id, latency, status):
             "count": 1
         }))
 
-    # filtering (same as your cutoff logic)
+    # filtering 
     timestamps = r.lrange(ts_key, 0, -1)
 
     new_list = []
@@ -66,9 +61,7 @@ def record_metric(tenant_id, route_id, latency, status):
     for t in new_list:
         r.rpush(ts_key, json.dumps(t))
 
-    # -------------------------
-    # status logic (UNCHANGED)
-    # -------------------------
+    # status logic 
     if status == "blocked":
         r.hincrby(key, "blocked_requests", 1)
         return
@@ -108,9 +101,7 @@ def get_metrics():
 
         avg_latency = total_latency / allowed if allowed > 0 else 0
 
-        # -------------------------
         # timestamps (same logic)
-        # -------------------------
         ts_key = _timestamps_key(tenant_id, route_id)
         raw_ts = r.lrange(ts_key, 0, -1)
 
@@ -133,9 +124,7 @@ def get_metrics():
 
         bucketed_timestamps = bucketed_timestamps[-60:]
 
-        # -------------------------
         # tenant aggregation (same logic)
-        # -------------------------
         if tenant_id not in tenant_map:
             tenant_map[tenant_id] = {
                 "tenant_id": int(tenant_id),
