@@ -52,7 +52,7 @@ RATE_LIMIT_SHA = cast(str, r.script_load(RATE_LIMIT_SCRIPT))
 async def rate_limiter(request: Request, call_next):
 
     #for github oauth
-    if request.url.path.startswith("/auth")  or request.url.path.startswith("/api"):
+    if request.url.path.startswith("/auth")  or request.url.path.startswith("/api") or request.url.path.startswith("/metrics"):
         return await call_next(request)
     
     now = time.time()
@@ -62,7 +62,7 @@ async def rate_limiter(request: Request, call_next):
 
     tenant = getattr(request.state, "tenant", None)
     if tenant is None:
-        return Response(content="No tenant", status_code=402)
+        return Response(content="No tenant", status_code=401)
 
     api_key = getattr(request.state, "api_key", None)
     if api_key is None:
@@ -73,7 +73,7 @@ async def rate_limiter(request: Request, call_next):
     if api_key_id is None:
         return Response(content="Missing API Key ID", status_code=401)
 
-    rate_config = cache["rate_limits"].get(api_key)
+    rate_config = cache["rate_limits"].get(api_key_id)
     if rate_config is None:
         return Response(content="No Rate limits found", status_code=404)
 
@@ -85,7 +85,7 @@ async def rate_limiter(request: Request, call_next):
 
     route = routes.get(pref)
     if route is None:
-        return await call_next(request)
+        return Response("Route not found", status_code=404)
 
     route_id = route["route_id"]
 

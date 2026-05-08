@@ -28,35 +28,57 @@ async def get_tenant_by_api_key(api_key: str):
         }
 
 
-# RATE LIMITS (UPDATED → route_id)
+# ----------------------------
+# RATE LIMITS (FIXED → USING api_key_id)
+# ----------------------------
+
 async def get_all_rate_limits():
     if db.pool is None:
         raise RuntimeError("DB not connected")
 
     async with db.pool.acquire() as conn:
 
-        # GLOBAL
+        # ----------------------------
+        # GLOBAL RATE LIMITS
+        # ----------------------------
         global_rows = await conn.fetch("""
-            SELECT ak.key, rl.refill_rate, rl.capacity
+            SELECT 
+                ak.id AS api_key_id,
+                rl.refill_rate,
+                rl.capacity
             FROM api_keys ak
-            JOIN rate_limits rl ON ak.id = rl.api_key_id
+            JOIN rate_limits rl 
+                ON ak.id = rl.api_key_id
         """)
 
-        # ROUTE LEVEL (IMPORTANT CHANGE)
+        # ----------------------------
+        # ROUTE LEVEL RATE LIMITS
+        # ----------------------------
         route_rows = await conn.fetch("""
-            SELECT ak.key, r.id as route_id, r.name as route_name,
-                   rrl.refill_rate, rrl.capacity
+            SELECT 
+                ak.id AS api_key_id,
+                r.id AS route_id,
+                r.name AS route_name,
+                rrl.refill_rate,
+                rrl.capacity
             FROM api_keys ak
-            JOIN tenants t ON ak.tenant_id = t.id
-            JOIN routes r ON r.tenant_id = t.id
-            JOIN route_rate_limits rrl ON r.id = rrl.route_id
+            JOIN tenants t 
+                ON ak.tenant_id = t.id
+            JOIN routes r 
+                ON r.tenant_id = t.id
+            JOIN route_rate_limits rrl 
+                ON r.id = rrl.route_id
         """)
 
         result = {}
 
-        # GLOBAL
+        # ----------------------------
+        # BUILD GLOBAL STRUCTURE
+        # ----------------------------
         for row in global_rows:
-            result[row["key"]] = {
+            api_key_id = row["api_key_id"]
+
+            result[api_key_id] = {
                 "global": {
                     "refill_rate": row["refill_rate"],
                     "capacity": row["capacity"]
@@ -64,23 +86,25 @@ async def get_all_rate_limits():
                 "routes": {}
             }
 
-        # ROUTE (NOW USING route_id)
+        # ----------------------------
+        # ADD ROUTE LIMITS
+        # ----------------------------
         for row in route_rows:
-            key = row["key"]
+            api_key_id = row["api_key_id"]
 
-            if key not in result:
+            # Skip if no global config exists
+            if api_key_id not in result:
                 continue
 
             route_id = row["route_id"]
 
-            result[key]["routes"][route_id] = {
-                "route_name": row["route_name"],  # optional but useful
+            result[api_key_id]["routes"][route_id] = {
+                "route_name": row["route_name"],  # optional (for UI)
                 "refill_rate": row["refill_rate"],
                 "capacity": row["capacity"]
             }
 
         return result
-
 
 # ROUTES FOR TENANT 
 async def get_routes_for_tenant(tenant_id: int):
@@ -261,6 +285,28 @@ async def get_projects_repo(user_id: int):
         )
         return rows
     
+async def get_project_routes(project_id: int):
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id
+            FROM routes
+            WHERE tenant_id = $1
+            """,
+            project_id
+        )
+        return rows
+    
+async def delete_project_repo(project_id: int):
+    async with db.pool.acquire() as conn:
+        await conn.execute(
+            """
+            DELETE FROM tenants
+            WHERE id = $1
+            """,
+            project_id
+        )
+    
 
 # ----------------------------
 # OWNERSHIP CHECKS
@@ -309,7 +355,7 @@ async def get_route_owner(route_id: int):
     async with db.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT t.user_id
+            SELECT t.user_id, t.id AS tenant_id
             FROM routes r
             JOIN tenants t ON r.tenant_id = t.id
             WHERE r.id = $1
@@ -371,5 +417,104 @@ async def get_route_rate_limit(route_id: int):
             WHERE route_id = $1
             """,
             route_id
+        )
+        return row
+    
+
+# ----------------------------
+# ROUTES
+# ----------------------------
+
+async def create_route_repo(project_id: int, name: str):
+    async with db.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO routes (tenant_id, name)
+            VALUES ($1, $2)
+            RETURNING id, name
+            """,
+            project_id,
+            name
+        )
+        return row
+
+
+async def get_routes_repo(project_id: int):
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, name
+            FROM routes
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            """,
+            project_id
+        )
+        return rows
+    
+async def delete_route_repo(route_id: int):
+    async with db.pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM routes WHERE id = $1",
+            route_id
+        )
+
+async def get_route_by_id(route_id: int):
+    async with db.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, tenant_id, name
+            FROM routes
+            WHERE id = $1
+            """,
+            route_id
+        )
+        return row
+    
+
+#backend
+
+async def create_backend_repo(route_id: int, url: str):
+    async with db.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO backends (route_id, url)
+            VALUES ($1, $2)
+            RETURNING id, route_id, url
+            """,
+            route_id,
+            url
+        )
+        return row
+    
+async def get_backends_repo(route_id: int):
+    async with db.pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, url
+            FROM backends
+            WHERE route_id = $1
+            ORDER BY id DESC
+            """,
+            route_id
+        )
+        return rows
+    
+async def delete_backend_repo(backend_id: int):
+    async with db.pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM backends WHERE id = $1",
+            backend_id
+        )
+
+async def get_backend_by_id(backend_id: int):
+    async with db.pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, route_id
+            FROM backends
+            WHERE id = $1
+            """,
+            backend_id
         )
         return row

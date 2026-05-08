@@ -20,6 +20,9 @@ from routes.project_route import router as project_router
 
 from routes.api_key_route import router as api_key_router
 from routes.rate_limit_route import router as rate_limit_router
+from routes.routes_route import router as route_router
+from routes.backend_route import  router as backend_router
+from routes.metrics_route import router as metrics_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -92,14 +95,18 @@ app.include_router(auth_router, prefix="/auth")
 app.include_router(project_router, prefix="/api/projects")
 app.include_router(api_key_router, prefix="/api/keys")
 app.include_router(rate_limit_router, prefix="/api/rate-limit")
-
-app.middleware("http")(rate_limiter)
-app.middleware("http")(auth_middleware)
-app.middleware("http")(middleman)
-app.middleware("http")(user_middleware)
+app.include_router(route_router, prefix="/api/routes")
+app.include_router(backend_router, prefix="/api/backends")
+app.include_router(metrics_router, prefix="/metrics")
 
 
 app.api_route(
     "/proxy/{pref}/{full_path:path}",
     methods=["GET","POST","PUT","PATCH","DELETE"]
 )(proxy_handler)
+
+app.middleware("http")(rate_limiter)
+app.middleware("http")(auth_middleware)
+app.middleware("http")(middleman)
+app.middleware("http")(user_middleware)
+

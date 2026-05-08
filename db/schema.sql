@@ -65,3 +65,7 @@ ALTER TABLE tenants ADD COLUMN user_id INTEGER;
 ALTER TABLE tenants
 ADD CONSTRAINT fk_user
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+ALTER TABLE routes
+ADD CONSTRAINT unique_name_per_project
+UNIQUE (tenant_id, name);

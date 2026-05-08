@@ -90,8 +90,15 @@ def get_metrics():
 
         data = r.hgetall(key)
 
-        def to_int(x): return int(x or 0)
-        def to_float(x): return float(x or 0)
+        def to_int(x):
+            if x is None:
+                return 0
+            return int(x.decode() if isinstance(x, bytes) else x)
+
+        def to_float(x):
+            if x is None:
+                return 0.0
+            return float(x.decode() if isinstance(x, bytes) else x)
 
         total_requests = to_int(data.get("total_requests"))
         allowed = to_int(data.get("allowed_requests"))
@@ -161,5 +168,7 @@ def get_metrics():
         del tenant["total_latency"]
 
         result["tenants"].append(tenant)
+
+    print("metrics",result)
 
     return result

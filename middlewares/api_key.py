@@ -6,11 +6,12 @@ from core.cache import cache
 async def auth_middleware(request: Request, call_next):
 
     #for github oauth
-    if request.url.path.startswith("/auth") or request.url.path.startswith("/api"):
+    if request.url.path.startswith("/auth") or request.url.path.startswith("/api") or request.url.path.startswith("/metrics"):
         return await call_next(request)
     
 
     key_header = request.headers.get("x-api-key")
+    print(key_header)
 
     if key_header is None:
         return Response(content="Missing API Key", status_code=401)
