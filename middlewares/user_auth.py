@@ -8,15 +8,13 @@ JWT_SECRET = os.getenv("JWT_SECRET")
 
 async def user_middleware(request: Request, call_next):
 
-    auth_header = request.headers.get("Authorization")
+    token = request.cookies.get("strata_token")
 
-    if auth_header is None:
+    if token is None:
         request.state.user = None
         return await call_next(request)
 
     try:
-        # Extract token
-        token = auth_header.split(" ")[1]
 
         payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
 

@@ -188,36 +188,50 @@ async def get_all_backends():
 # API KEYS
 # ----------------------------
 
-async def create_api_key_repo(project_id: int):
+async def create_api_key_repo(project_id: int, name : str):
     key = secrets.token_urlsafe(32)
 
     async with db.pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            INSERT INTO api_keys (tenant_id, key)
-            VALUES ($1, $2)
-            RETURNING id, key
+            INSERT INTO api_keys (tenant_id, key, name)
+            VALUES ($1, $2, $3)
+            RETURNING id, key, name
             """,
             project_id,
-            key
+            key,
+            name
         )
 
     return row
 
 
 async def get_api_keys_repo(project_id: int):
+
     async with db.pool.acquire() as conn:
+
         rows = await conn.fetch(
             """
-            SELECT id, key
-            FROM api_keys
-            WHERE tenant_id = $1
-            ORDER BY id DESC
+            SELECT
+                ak.id,
+                ak.key,
+                ak.name,
+                ak.created_at,
+                grl.refill_rate,
+                grl.capacity
+            FROM api_keys ak
+
+            LEFT JOIN rate_limits grl
+            ON ak.id = grl.api_key_id
+
+            WHERE ak.tenant_id = $1
+
+            ORDER BY ak.id DESC
             """,
             project_id
         )
-    return rows
 
+    return rows
 
 async def delete_api_key_repo(key_id: int):
     async with db.pool.acquire() as conn:
@@ -276,7 +290,7 @@ async def get_projects_repo(user_id: int):
     async with db.pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, name
+            SELECT id, name, created_at
             FROM tenants
             WHERE user_id = $1
             ORDER BY id DESC
@@ -285,6 +299,24 @@ async def get_projects_repo(user_id: int):
         )
         return rows
     
+
+async def get_backends_count_for_project(project_id: int):
+
+    async with db.pool.acquire() as conn:
+
+        count = await conn.fetchval(
+            """
+            SELECT COUNT(b.id)
+            FROM backends b
+            JOIN routes r ON b.route_id = r.id
+            WHERE r.tenant_id = $1
+            """,
+            project_id
+        )
+
+        return count
+    
+
 async def get_project_routes(project_id: int):
     async with db.pool.acquire() as conn:
         rows = await conn.fetch(
@@ -443,7 +475,7 @@ async def get_routes_repo(project_id: int):
     async with db.pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, name
+            SELECT id, name, created_at
             FROM routes
             WHERE tenant_id = $1
             ORDER BY id DESC
@@ -471,6 +503,40 @@ async def get_route_by_id(route_id: int):
         )
         return row
     
+async def get_route_backends_count(route_id: int):
+
+    async with db.pool.acquire() as conn:
+
+        count = await conn.fetchval(
+            """
+            SELECT COUNT(*)
+            FROM backends
+            WHERE route_id = $1
+            """,
+            route_id
+        )
+
+        return count
+    
+async def get_route_backends(route_id: int):
+
+    async with db.pool.acquire() as conn:
+
+        rows = await conn.fetch(
+            """
+            SELECT
+                id,
+                url,
+                created_at
+            FROM backends
+            WHERE route_id = $1
+            ORDER BY id DESC
+            """,
+            route_id
+        )
+
+    return rows
+    
 
 #backend
 
@@ -491,7 +557,7 @@ async def get_backends_repo(route_id: int):
     async with db.pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, url
+            SELECT id, url,created_at
             FROM backends
             WHERE route_id = $1
             ORDER BY id DESC

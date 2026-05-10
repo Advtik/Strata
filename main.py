@@ -23,6 +23,7 @@ from routes.rate_limit_route import router as rate_limit_router
 from routes.routes_route import router as route_router
 from routes.backend_route import  router as backend_router
 from routes.metrics_route import router as metrics_router
+from fastapi.middleware.cors import CORSMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -50,6 +51,14 @@ async def lifespan(app: FastAPI):
         pass
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.get("/test-tenant")
 async def test_tenant():

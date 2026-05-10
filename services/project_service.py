@@ -1,5 +1,6 @@
-from core.repository import create_project_repo, get_projects_repo, delete_project_repo, get_project_owner
+from core.repository import create_project_repo, get_projects_repo, delete_project_repo, get_project_owner, get_backends_count_for_project
 from core.redis_cleanup import cleanup_project
+from core.redis_client import r
 
 
 async def create_project_service(user, data):
@@ -18,11 +19,55 @@ async def create_project_service(user, data):
 
 
 async def get_projects_service(user):
+
     if user is None:
         raise Exception("Not authenticated")
 
-    return await get_projects_repo(user["id"])
+    projects = await get_projects_repo(user["id"])
 
+    enriched_projects = []
+
+    for project in projects:
+
+        routes = await get_project_routes(project["id"])
+
+        route_count = len(routes)
+
+        backend_count = await get_backends_count_for_project(project["id"])
+
+        total_requests = 0
+
+        status = "healthy"
+
+        for route in routes:
+
+            route_id = route["id"]
+
+            metrics_key = f"metrics:{project['id']}:{route_id}"
+
+            metrics = r.hgetall(metrics_key)
+
+            if metrics:
+
+                decoded = {
+                    (k.decode() if isinstance(k, bytes) else k):
+                    (v.decode() if isinstance(v, bytes) else v)
+                    for k, v in metrics.items()
+                }
+
+                total_requests += int(decoded.get("total_requests", 0))
+
+        enriched_projects.append({
+            "id": project["id"],
+            "name": project["name"],
+            "created_at": str(project["created_at"]),
+            "routes": route_count,
+            "backends": backend_count,
+            "requests": total_requests,
+            "status": status
+        })
+
+    return enriched_projects
 
 from core.redis_cleanup import cleanup_project
 from core.repository import get_project_routes

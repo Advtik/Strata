@@ -27,13 +27,7 @@ async def get_projects_controller(request: Request):
     try:
         projects = await get_projects_service(user)
 
-        return [
-            {
-                "id": p["id"],
-                "name": p["name"]
-            }
-            for p in projects
-        ]
+        return projects
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

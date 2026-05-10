@@ -27,6 +27,7 @@ CREATE TABLE backends (
 
 CREATE TABLE api_keys (
     id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
     key TEXT UNIQUE NOT NULL,
     tenant_id INTEGER NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

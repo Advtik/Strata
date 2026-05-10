@@ -4,6 +4,8 @@ from jose import jwt
 from services.auth_service import get_or_create_user
 from fastapi import Request
 import os
+from fastapi.responses import RedirectResponse
+from datetime import datetime, timedelta, timezone
 
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
 
@@ -44,11 +46,27 @@ async def github_callback_controller(code: str):
         user_data["avatar_url"]
     )
 
+    payload = {
+        "user_id": user["id"],
+        "exp": datetime.now(timezone.utc) + timedelta(days=3)
+    }
     token = jwt.encode(
-        {"user_id": user["id"]},
+        payload,
         JWT_SECRET,
         algorithm="HS256"
     )
 
-    return {"token": token}
+    response = RedirectResponse(
+        url="http://127.0.0.1:5173/projects"
+    )
 
+    response.set_cookie(
+        key="strata_token",
+        value=token,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 3
+    )
+
+    return response

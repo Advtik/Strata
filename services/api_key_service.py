@@ -15,7 +15,7 @@ DEFAULT_CAPACITY = 100
 DEFAULT_REFILL = 10.0
 
 
-async def create_api_key_service(user, project_id):
+async def create_api_key_service(user, project_id, name):
 
     if user is None:
         raise Exception("Not authenticated")
@@ -32,7 +32,7 @@ async def create_api_key_service(user, project_id):
     if count >= MAX_KEYS_PER_PROJECT:
         raise Exception("API key limit reached")
 
-    key = await create_api_key_repo(project_id)
+    key = await create_api_key_repo(project_id, name)
 
      # ✅ AUTO DEFAULT RATE LIMIT
     await set_global_rate_limit_service(

@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 @router.post("/{project_id}")
-async def create_key(request: Request, project_id: int):
+async def create_key(request: Request, project_id: int,):
     return await create_api_key_controller(request, project_id)
 
 

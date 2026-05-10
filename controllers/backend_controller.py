@@ -1,5 +1,6 @@
 from fastapi import Request, HTTPException
 
+import traceback
 from services.backend_service import (
     create_backend_service,
     get_backends_service,
@@ -21,6 +22,9 @@ async def create_backend_controller(request: Request, route_id: int):
         }
 
     except Exception as e:
+
+        traceback.print_exc()
+
         raise HTTPException(400, str(e))
 
 

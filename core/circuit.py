@@ -73,9 +73,16 @@ def can_request(route_id: int, backend_id: int):
             r.hincrby(key, "trial_calls", 1)
             return True
         else:
-            return False
+            if time.time() - state["opened_at"] > COOLDOWN_TIME:
+                return True
+            else:
+                r.hset(key, mapping={
+                    "state": "OPEN",
+                    "opened_at": time.time(),
+                })
+                return False
 
-    return True
+        return True
 
 
 def record_success(route_id: int, backend_id: int):
@@ -93,7 +100,6 @@ def record_success(route_id: int, backend_id: int):
             r.hset(key, mapping={
                 "failures": 0,
                 "state": "CLOSED",
-                "opened_at": 0,
                 "trial_calls": 0,
                 "trial_success": 0
             })
