@@ -66,7 +66,7 @@ async def set_route_rate_limit_service(user, route_id, data):
     if capacity is None or refill is None:
         raise Exception("Missing fields")
     
-    if capacity is 0 or refill is 0:
+    if capacity == 0 or refill == 0:
         raise Exception("Cannot be zero")
 
     capacity, refill = clamp_limits(capacity, refill)

@@ -584,3 +584,28 @@ async def get_backend_by_id(backend_id: int):
             backend_id
         )
         return row
+    
+
+async def get_user_routes_with_tenants(
+    user_id: int
+):
+
+    async with db.pool.acquire() as conn:
+
+        rows = await conn.fetch(
+            """
+            SELECT
+                r.id AS route_id,
+                t.id AS tenant_id
+
+            FROM routes r
+
+            JOIN tenants t
+            ON r.tenant_id = t.id
+
+            WHERE t.user_id = $1
+            """,
+            user_id
+        )
+
+        return rows

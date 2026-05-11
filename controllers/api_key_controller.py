@@ -4,7 +4,6 @@ from services.api_key_service import (
     get_api_keys_service,
     delete_api_key_service
 )
-import traceback
 
 async def create_api_key_controller(request: Request, project_id: int):
     user = request.state.user
@@ -24,12 +23,10 @@ async def create_api_key_controller(request: Request, project_id: int):
             "id": key["id"],
             "key": key["key"] ,
             "name": key["name"]
-              # show only once in real product
+            
         }
 
     except Exception as e:
-        traceback.print_exc()
-
         raise HTTPException(400, str(e))
 
 

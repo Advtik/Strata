@@ -83,6 +83,13 @@ async def rate_limiter(request: Request, call_next):
     if routes is None:
         return Response(content="No routes for tenant", status_code=404)
 
+    print("========== DEBUG ==========")
+    print("FULL PATH:", request.url.path)
+    print("PATH PARTS:", path_parts)
+    print("PREF:", pref)
+    print("TENANT:", tenant)
+    print("ROUTES CACHE:", routes)
+    print("===========================")
     route = routes.get(pref)
     if route is None:
         return Response("Route not found", status_code=404)

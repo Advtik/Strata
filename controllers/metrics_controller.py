@@ -1,7 +1,8 @@
 from fastapi import Request, HTTPException
 from services.metrics_service import (
     get_route_metrics_service,
-    get_backends_metrics_service
+    get_backends_metrics_service,
+    get_projects_overview_service
 )
 from core.repository import get_route_owner
 
@@ -36,3 +37,20 @@ async def get_backends_metrics_controller(request: Request, route_id: int):
         raise HTTPException(403, "Forbidden")
 
     return await get_backends_metrics_service(route_id)
+
+async def get_projects_overview_controller(
+    request: Request
+):
+
+    user = request.state.user
+
+    if user is None:
+
+        raise HTTPException(
+            401,
+            "Unauthorized"
+        )
+
+    return await get_projects_overview_service(
+        user["id"]
+    )

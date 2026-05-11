@@ -57,14 +57,14 @@ async def github_callback_controller(code: str):
     )
 
     response = RedirectResponse(
-        url="http://127.0.0.1:5173/projects"
+        url=os.getenv("FRONTEND_REDIRECT_URL")
     )
 
     response.set_cookie(
         key="strata_token",
         value=token,
         httponly=True,
-        secure=False,
+        secure=os.getenv("ENV") == "production",
         samesite="lax",
         max_age=60 * 60 * 24 * 3
     )

@@ -2,7 +2,6 @@ from fastapi import APIRouter, Request
 
 from controllers.route_controller import (
     create_route_controller,
-    delete_route_controller,
     get_routes_controller,
     delete_route_controller,
     get_route_detail_controller

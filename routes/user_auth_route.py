@@ -1,5 +1,4 @@
 from fastapi import APIRouter
-import httpx
 from jose import jwt
 from services.auth_service import get_or_create_user
 from fastapi import Request

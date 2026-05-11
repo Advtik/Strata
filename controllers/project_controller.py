@@ -1,7 +1,8 @@
 from fastapi import Request, HTTPException
 from services.project_service import (
     create_project_service,
-    get_projects_service
+    get_projects_service,
+    delete_project_service
 )
 
 
@@ -31,3 +32,14 @@ async def get_projects_controller(request: Request):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
+async def delete_project_controller(request, project_id: int):
+    user = request.state.user
+
+    try:
+        await delete_project_service(user, project_id)
+        return {"message": "project deleted"}
+
+    except Exception as e:
+        raise HTTPException(400, str(e))
+    
