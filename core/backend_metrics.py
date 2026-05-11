@@ -50,13 +50,25 @@ def record_backend_success(route_id: int, backend_id: int, latency: float) -> No
     r.hset(key, "avg_latency", str(new_latency))  # ✅ store as string
 
 
-def record_backend_failure(route_id: int, backend_id: int) -> None:
+def record_backend_failure(route_id: int, backend_id: int,latency:float) -> None:
     key = _get_key(route_id, backend_id)
     init_backend(route_id, backend_id)
     r.hincrby(key, "requests", 1)
     r.hincrby(key, "failures", 1)
     r.hincrbyfloat(key, "recent_requests", 1.0)
     r.hincrbyfloat(key, "recent_failures", 1.0)   # ← ADD THIS
+    # EMA latency
+    ALPHA = 0.2
+
+    raw = r.hget(key, "avg_latency")
+    avg_latency = float(raw) if raw is not None else 0.0
+
+    if avg_latency == 0:
+        new_latency = latency
+    else:
+        new_latency = (1 - ALPHA) * avg_latency + ALPHA * latency
+
+    r.hset(key, "avg_latency", str(new_latency))  # ✅ store as string
 
 
 

@@ -126,7 +126,8 @@ async def proxy_handler(pref: str, full_path: str, request: Request):
 
                     record_backend_failure(
                         route_id=route_id,
-                        backend_id=backend["id"]
+                        backend_id=backend["id"],
+                        latency=backend_latency
                     )
 
                     print("Server error from backend:", backend_url)

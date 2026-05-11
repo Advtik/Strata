@@ -57,6 +57,26 @@ async def get_projects_service(user):
 
                 total_requests += int(decoded.get("total_requests", 0))
 
+            # ── health check ───────────────────────────
+            health_keys = list(r.scan_iter(f"health:{route_id}:*"))
+
+            for health_key in health_keys:
+                health_data = r.hgetall(health_key)
+                if not health_data:
+                    continue
+
+                is_healthy = health_data.get(b"healthy", health_data.get("healthy", b"1"))
+                if isinstance(is_healthy, bytes):
+                    is_healthy = is_healthy.decode()
+
+                if is_healthy == "0":
+                    status = "degraded"
+                    break
+
+            if status == "degraded":
+                break
+
+
         enriched_projects.append({
             "id": project["id"],
             "name": project["name"],
