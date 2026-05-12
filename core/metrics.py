@@ -3,7 +3,7 @@ import json
 
 from core.redis_client import r
 
-RETENTION_SECONDS = 600
+RETENTION_SECONDS = 3600
 
 
 def _metrics_key(
