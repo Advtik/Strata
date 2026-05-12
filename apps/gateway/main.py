@@ -54,6 +54,8 @@ async def lifespan(app: FastAPI):
 
 gateway_app = FastAPI(lifespan=lifespan)
 
+gateway_app.router.redirect_slashes = False
+
 @gateway_app.get("/test")
 async def test():
     return {"working": True}
@@ -63,7 +65,7 @@ gateway_app.middleware("http")(auth_middleware)
 gateway_app.middleware("http")(middleman)
 
 
-@gateway_app.get("/proxy/test")
+@gateway_app.get("/proxy/echo/test")
 async def proxy_test():
     return {"ok":True}
 

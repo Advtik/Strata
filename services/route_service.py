@@ -7,7 +7,8 @@ from core.repository import (
     delete_route_repo,
     get_route_owner,
     get_route_by_id,
-    get_route_backends
+    get_route_backends,
+    get_route_backends_count
 )
 
 from core.redis_cleanup import (
@@ -15,8 +16,6 @@ from core.redis_cleanup import (
 )
 
 from core.redis_client import r
-from core.repository import get_route_backends_count
-
 
 from services.metrics_service import (
     get_route_metrics_service,
@@ -27,66 +26,118 @@ from services.rate_limit_service import (
     get_route_rate_limit_service
 )
 
-from core.repository import (
-    get_route_by_id,
-    get_route_owner,
-    get_route_backends
+from core.health import (
+    is_backend_healthy
 )
 
-from core.health import is_backend_healthy
+from core.circuit import (
+    get_state
+)
 
-from core.circuit import get_state
 
-async def create_route_service(user, project_id, data):
+async def create_route_service(
+    user,
+    project_id,
+    data
+):
 
-    # 🔐 Step 1: Auth check
     if user is None:
-        raise Exception("Not authenticated")
 
-    # 🔐 Step 2: Ownership check
-    owner = await get_project_owner(project_id)
+        raise Exception(
+            "Not authenticated"
+        )
 
-    if not owner or owner["user_id"] != user["id"]:
-        raise Exception("Not allowed")
+    owner = await get_project_owner(
+        project_id
+    )
 
-    # 🧠 Step 3: Extract data
+    if (
+        not owner
+        or owner["user_id"] != user["id"]
+    ):
+
+        raise Exception(
+            "Not allowed"
+        )
+
     name = data.get("name")
 
     if not name:
-        raise Exception("Name required")
 
-    # 🧠 Step 4: Validate name (URL-safe)
-    if not re.match(r'^[a-zA-Z0-9\-]+$', name):
-        raise Exception("Invalid route name")
+        raise Exception(
+            "Name required"
+        )
+
+    if not re.match(
+        r"^[a-zA-Z0-9\-]+$",
+        name
+    ):
+
+        raise Exception(
+            "Invalid route name"
+        )
 
     if len(name) > 50:
-        raise Exception("Name too long")
 
-    # 🚀 Step 5: Create route
+        raise Exception(
+            "Name too long"
+        )
+
     try:
-        return await create_route_repo(project_id, name)
-    except:
-        raise Exception("Route Already Exists")
+
+        return await create_route_repo(
+            project_id,
+            name
+        )
+
+    except Exception:
+
+        raise Exception(
+            "Route Already Exists"
+        )
 
 
-async def get_routes_service(user, project_id):
+async def get_routes_service(
+    user,
+    project_id
+):
 
     if user is None:
-        raise Exception("Not authenticated")
 
-    owner = await get_project_owner(project_id)
+        raise Exception(
+            "Not authenticated"
+        )
 
-    if not owner or owner["user_id"] != user["id"]:
-        raise Exception("Not allowed")
+    owner = await get_project_owner(
+        project_id
+    )
 
-    routes = await get_routes_repo(project_id)
+    if (
+        not owner
+        or owner["user_id"] != user["id"]
+    ):
+
+        raise Exception(
+            "Not allowed"
+        )
+
+    routes = await get_routes_repo(
+        project_id
+    )
 
     enriched_routes = []
 
     for route in routes:
-        backends = await get_route_backends(route["id"])
-        backend_count = await get_route_backends_count(route["id"])
 
+        backends = await get_route_backends(
+            route["id"]
+        )
+
+        backend_count = (
+            await get_route_backends_count(
+                route["id"]
+            )
+        )
 
         healthy_count = 0
         unhealthy_count = 0
@@ -95,19 +146,22 @@ async def get_routes_service(user, project_id):
 
             backend_id = backend["id"]
 
-            health_key = f"health:{route['id']}:{backend_id}"
+            health_key = (
+                f"health:{route['id']}:{backend_id}"
+            )
 
-            health = r.hgetall(health_key)
+            health = await r.hgetall(
+                health_key
+            )
 
             if health:
 
-                decoded = {
-                    (k.decode() if isinstance(k, bytes) else k):
-                    (v.decode() if isinstance(v, bytes) else v)
-                    for k, v in health.items()
-                }
-
-                is_healthy = int(decoded.get("healthy", 0))
+                is_healthy = int(
+                    health.get(
+                        "healthy",
+                        0
+                    )
+                )
 
                 if is_healthy == 1:
 
@@ -121,9 +175,8 @@ async def get_routes_service(user, project_id):
 
                 unhealthy_count += 1
 
-        print("healthy",healthy_count)
-
         if healthy_count == 0:
+
             status = "offline"
 
         elif healthy_count == backend_count:
@@ -138,65 +191,108 @@ async def get_routes_service(user, project_id):
 
             status = "offline"
 
+        metrics_key = (
+            f"metrics:{project_id}:{route['id']}"
+        )
 
-        
-        metrics_key = f"metrics:{project_id}:{route['id']}"
-
-        metrics = r.hgetall(metrics_key)
+        metrics = await r.hgetall(
+            metrics_key
+        )
 
         total_requests = 0
         total_latency = 0
         avg_latency = 0
-        
 
         if metrics:
 
-            decoded = {
-                (k.decode() if isinstance(k, bytes) else k):
-                (v.decode() if isinstance(v, bytes) else v)
-                for k, v in metrics.items()
-            }
-
-            total_requests = int(decoded.get("total_requests", 0))
+            total_requests = int(
+                metrics.get(
+                    "total_requests",
+                    0
+                )
+            )
 
             total_latency = round(
-                float(decoded.get("total_latency", 0)),
+                float(
+                    metrics.get(
+                        "total_latency",
+                        0
+                    )
+                ),
                 2
             )
-            avg_latency = 0 if total_requests == 0 else total_latency / total_requests
+
+            avg_latency = (
+                0
+                if total_requests == 0
+                else (
+                    total_latency /
+                    total_requests
+                )
+            )
 
         enriched_routes.append({
+
             "id": route["id"],
+
             "name": route["name"],
+
             "path": f"/{route['name']}",
+
             "backends": backend_count,
+
             "requests": total_requests,
+
             "avg_latency": avg_latency,
+
             "status": status,
-            "created_at": str(route["created_at"])
+
+            "created_at": str(
+                route["created_at"]
+            )
         })
 
     return enriched_routes
 
 
-async def delete_route_service(user, route_id):
+async def delete_route_service(
+    user,
+    route_id
+):
 
     if user is None:
-        raise Exception("Not authenticated")
 
-    owner = await get_route_owner(route_id)
+        raise Exception(
+            "Not authenticated"
+        )
 
-    if not owner or owner["user_id"] != user["id"]:
-        raise Exception("Not allowed")
-    
-    route = await get_route_by_id(route_id)
+    owner = await get_route_owner(
+        route_id
+    )
+
+    if (
+        not owner
+        or owner["user_id"] != user["id"]
+    ):
+
+        raise Exception(
+            "Not allowed"
+        )
+
+    route = await get_route_by_id(
+        route_id
+    )
 
     tenant_id = route["tenant_id"]
 
-    # 🔥 CLEANUP
-    cleanup_route(tenant_id, route_id)
+    await cleanup_route(
+        tenant_id,
+        route_id
+    )
 
-    await delete_route_repo(route_id)
+    await delete_route_repo(
+        route_id
+    )
 
 
 async def get_route_detail_service(
@@ -205,53 +301,54 @@ async def get_route_detail_service(
 ):
 
     if user is None:
-        raise Exception("Not authenticated")
 
-    owner = await get_route_owner(route_id)
+        raise Exception(
+            "Not authenticated"
+        )
 
-    if not owner or owner["user_id"] != user["id"]:
-        raise Exception("Not allowed")
+    owner = await get_route_owner(
+        route_id
+    )
+
+    if (
+        not owner
+        or owner["user_id"] != user["id"]
+    ):
+
+        raise Exception(
+            "Not allowed"
+        )
 
     tenant_id = owner["tenant_id"]
 
-    # ----------------------------
-    # ROUTE
-    # ----------------------------
-
-    route = await get_route_by_id(route_id)
-
-    # ----------------------------
-    # ROUTE METRICS
-    # ----------------------------
-
-    route_metrics = await get_route_metrics_service(
-        tenant_id,
+    route = await get_route_by_id(
         route_id
     )
 
-    # ----------------------------
-    # RATE LIMIT
-    # ----------------------------
-
-    rate_limit = await get_route_rate_limit_service(
-        user,
-        route_id
+    route_metrics = (
+        await get_route_metrics_service(
+            tenant_id,
+            route_id
+        )
     )
 
-    # ----------------------------
-    # BACKEND CONFIGS
-    # ----------------------------
-
-    backend_configs = await get_route_backends(
-        route_id
+    rate_limit = (
+        await get_route_rate_limit_service(
+            user,
+            route_id
+        )
     )
 
-    # ----------------------------
-    # BACKEND METRICS
-    # ----------------------------
+    backend_configs = (
+        await get_route_backends(
+            route_id
+        )
+    )
 
-    backend_metrics = await get_backends_metrics_service(
-        route_id
+    backend_metrics = (
+        await get_backends_metrics_service(
+            route_id
+        )
     )
 
     metrics_map = {
@@ -270,12 +367,12 @@ async def get_route_detail_service(
             {}
         )
 
-        healthy = is_backend_healthy(
+        healthy = await is_backend_healthy(
             route_id,
             backend_id
         )
 
-        circuit = get_state(
+        circuit = await get_state(
             route_id,
             backend_id
         )
@@ -303,21 +400,29 @@ async def get_route_detail_service(
                 circuit["opened_at"],
 
             "requests":
-                metrics.get("requests", 0),
+                metrics.get(
+                    "requests",
+                    0
+                ),
 
             "successes":
-                metrics.get("successes", 0),
+                metrics.get(
+                    "successes",
+                    0
+                ),
 
             "failures":
-                metrics.get("failures", 0),
+                metrics.get(
+                    "failures",
+                    0
+                ),
 
             "avg_latency":
-                metrics.get("avg_latency", 0)
+                metrics.get(
+                    "avg_latency",
+                    0
+                )
         })
-
-    # ----------------------------
-    # FINAL RESPONSE
-    # ----------------------------
 
     return {
 
@@ -342,6 +447,7 @@ async def get_route_detail_service(
             if rate_limit else 0,
 
         "monitoring": {
+
             **route_metrics,
 
             "rate_limit_threshold":
@@ -349,5 +455,6 @@ async def get_route_detail_service(
                 if rate_limit else 0
         },
 
-        "backends": enriched_backends
+        "backends":
+            enriched_backends
     }

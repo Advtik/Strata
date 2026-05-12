@@ -76,7 +76,10 @@ async def delete_backend_service(user, backend_id):
         raise Exception("Not allowed")
 
     # 🔥 Redis cleanup FIRST
-    cleanup_backend(route_id, backend_id)
+    await cleanup_backend(
+        route_id,
+        backend_id
+    )
 
     # DB delete
     await delete_backend_repo(backend_id)

@@ -32,9 +32,7 @@ async def load_routes_cache():
 
     cache["routes"] = routes_cache
 
-    print("Routes cache updated")
-    # DEBUG (remove later)
-    print("ROUTES CACHE:", cache["routes"])
+    
 
 
 # RATE LIMIT CACHE LOADER
@@ -47,8 +45,7 @@ async def load_rate_limits_cache():
 
     cache["rate_limits"] = rate_limits
 
-    print("Rate limits cache updated")
-    print("RATE LIMIT CACHE:", cache["rate_limits"])
+    
 
 
 # TENANTS CACHE LOADER (FIXED STRUCTURE)
@@ -68,9 +65,7 @@ async def load_tenants_cache():
     # }
     cache["tenants"] = tenants
 
-    print("Tenants cache updated")
-    print("TENANTS CACHE:", cache["tenants"])
-
+    
 
 
 # LOAD EVERYTHING

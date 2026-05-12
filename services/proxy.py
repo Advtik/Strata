@@ -1,25 +1,56 @@
-import httpx
+import asyncio
 import time
+import httpx
 
 from fastapi import Request, Response
 
-from core.health import is_backend_healthy
+from core.cache import cache
+
+from core.health import (
+    is_backend_healthy
+)
+
+from core.metrics import (
+    record_metric
+)
+
 from core.circuit import (
     can_request,
     record_success,
     record_failure
 )
 
-from core.cache import cache
-
-from core.metrics import record_metric
-
 from core.backend_metrics import (
     record_backend_success,
     record_backend_failure,
-    pick_best_backend,
     get_backend_score
 )
+
+
+client = httpx.AsyncClient(
+
+    timeout=httpx.Timeout(
+        connect=0.5,
+        read=10.0,
+        write=10.0,
+        pool=10.0
+    ),
+
+    limits=httpx.Limits(
+        max_connections=1000,
+        max_keepalive_connections=200
+    ),
+
+    http2=False
+)
+
+
+EXCLUDED_HEADERS = {
+    "content-length",
+    "transfer-encoding",
+    "connection",
+    "content-encoding"
+}
 
 
 async def proxy_handler(
@@ -28,18 +59,16 @@ async def proxy_handler(
     request: Request
 ):
 
-    query_params = request.query_params
+    start_time = time.perf_counter()
+
     tenant = request.state.tenant
 
-    print("PROXY HIT")
-    print(pref)
-    print("tenant ", tenant)
-
-    start_time = time.time()
-
-    routes = cache["routes"].get(tenant["id"])
+    routes = cache["routes"].get(
+        tenant["id"]
+    )
 
     if routes is None:
+
         return Response(
             content="No routes for tenant",
             status_code=404
@@ -48,6 +77,7 @@ async def proxy_handler(
     route = routes.get(pref)
 
     if route is None:
+
         return Response(
             content="Route not found",
             status_code=404
@@ -58,6 +88,7 @@ async def proxy_handler(
     backend_list = route["backends"]
 
     if not backend_list:
+
         return Response(
             content="No backend available",
             status_code=502
@@ -66,220 +97,212 @@ async def proxy_handler(
     healthy_backends = []
     unhealthy_backends = []
 
-    # classify backends
     for backend in backend_list:
+
+        backend_id = backend["id"]
+
+        allowed = await can_request(
+            route_id,
+            backend_id
+        )
+
+        if not allowed:
+
+            continue
+
+        healthy = await is_backend_healthy(
+            route_id,
+            backend_id
+        )
+
+        if healthy:
+
+            healthy_backends.append(
+                backend
+            )
+
+        else:
+
+            unhealthy_backends.append(
+                backend
+            )
+
+    if healthy_backends or unhealthy_backends:
+
+        backends = (
+            healthy_backends +
+            unhealthy_backends
+        )
+
+    else:
+
+        backends = backend_list
+
+    backend_scores = []
+
+    for backend in backends:
+
+        score = await get_backend_score(
+            route_id,
+            backend["id"]
+        )
+
+        backend_scores.append(
+            (score, backend)
+        )
+
+    backend_scores.sort(
+        key=lambda x: x[0]
+    )
+
+    sorted_backends = [
+        b for _, b in backend_scores
+    ]
+
+    headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower() not in {
+            "host",
+            "content-length",
+            "connection"
+        }
+    }
+
+    body = None
+
+    if request.method in {
+        "POST",
+        "PUT",
+        "PATCH"
+    }:
+
+        body = await request.body()
+
+    query_params = request.query_params
+
+    for backend in sorted_backends:
+
+        backend_id = backend["id"]
 
         backend_url = backend["url"]
 
-        # circuit breaker check
-        if not can_request(route_id, backend["id"]):
-            print("Circuit OPEN, skipping:", backend_url)
-            continue
+        target_url = (
+            f"{backend_url.rstrip('/')}"
+            f"/{full_path}"
+        )
 
-        if is_backend_healthy(route_id, backend["id"]):
-            healthy_backends.append(backend)
-        else:
-            unhealthy_backends.append(backend)
+        backend_start = (
+            time.perf_counter()
+        )
 
-    print("Healthy:", healthy_backends)
-    print("Unhealthy:", unhealthy_backends)
+        try:
 
-    # fallback logic
-    if not healthy_backends and not unhealthy_backends:
-        print("All circuits open → fallback to all backends")
-        backends = backend_list.copy()
-    else:
-        backends = healthy_backends + unhealthy_backends
-
-    # clean headers
-    headers = dict(request.headers)
-
-    headers.pop("host", None)
-    headers.pop("content-length", None)
-    headers.pop("connection", None)
-
-    body = await request.body()
-
-    async with httpx.AsyncClient(timeout=1.0) as client:
-
-        tried = set()
-
-        while len(tried) < len(backends):
-
-            backend = pick_best_backend(
-                route_id,
-                backends
+            response = await client.request(
+                method=request.method,
+                url=target_url,
+                headers={
+                    **headers,
+                    "accept-encoding": "identity"
+                },
+                params=query_params,
+                content=body
             )
 
-            if not backend:
-                return Response(
-                    "No backends detected",
-                    status_code=502
-                )
-
-            score = get_backend_score(
-                route_id,
-                backend["id"]
+            backend_latency = (
+                time.perf_counter() -
+                backend_start
             )
 
-            print(
-                f"Picked backend: "
-                f"{backend['url']} | "
-                f"Score: {score}"
-            )
+            if response.status_code >= 500:
 
-            backend_url = backend["url"]
-
-            # avoid retrying same backend
-            if backend_url in tried:
-
-                remaining = [
-                    b for b in backends
-                    if b["url"] not in tried
-                ]
-
-                if not remaining:
-                    break
-
-                backend = remaining[0]
-                backend_url = backend["url"]
-
-            tried.add(backend_url)
-
-            target_url = (
-                f"{backend['url'].rstrip('/')}"
-                f"/{full_path}"
-            )
-
-            print("Trying backend:", backend_url)
-
-            backend_start = time.time()
-
-            # IMPORTANT FIX
-            backend_latency = 0
-
-            try:
-
-                response = await client.request(
-                    method=request.method,
-                    url=target_url,
-                    headers=headers,
-                    params=query_params,
-                    content=body
-                )
-
-                print("TARGET URL:", target_url)
-                print("UPSTREAM STATUS:", response.status_code)
-                print("UPSTREAM BODY:", response.text)
-
-                # milliseconds
-                backend_latency = (
-                    time.time() - backend_start
-                ) 
-
-                # treat 5xx as failure
-                if response.status_code >= 500:
-
+                asyncio.create_task(
                     record_failure(
                         route_id,
-                        backend["id"]
+                        backend_id
                     )
+                )
 
+                asyncio.create_task(
                     record_backend_failure(
                         route_id=route_id,
-                        backend_id=backend["id"]
+                        backend_id=backend_id
                     )
+                )
 
-                    print(
-                        "Server error from backend:",
-                        backend_url
-                    )
+                continue
 
-                    continue
-
-                # success
+            asyncio.create_task(
                 record_success(
                     route_id,
-                    backend["id"]
+                    backend_id
                 )
+            )
 
+            asyncio.create_task(
                 record_backend_success(
                     route_id=route_id,
-                    backend_id=backend["id"],
+                    backend_id=backend_id,
                     latency=backend_latency
                 )
+            )
 
-                excluded = {
-                    "content-length",
-                    "transfer-encoding",
-                    "connection",
-                    "content-encoding"
-                }
+            resp_headers = {
+                k: v
+                for k, v in response.headers.items()
+                if k.lower() not in EXCLUDED_HEADERS
+            }
 
-                resp_headers = {}
+            total_latency = (
+                time.perf_counter() -
+                start_time
+            )
 
-                for k, v in response.headers.items():
-
-                    if k.lower() not in excluded:
-                        resp_headers[k] = v
-
-                print(
-                    "Upstream status:",
-                    response.status_code
-                )
-
-                # milliseconds
-                total_latency = (
-                    time.time() - start_time
-                ) 
-
+            asyncio.create_task(
                 record_metric(
                     tenant_id=tenant["id"],
                     route_id=route_id,
                     latency=total_latency,
                     status="allowed"
                 )
+            )
 
-                return Response(
-                    content=response.content,
-                    status_code=response.status_code,
-                    headers=resp_headers
-                )
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                headers=resp_headers
+            )
 
-            except httpx.RequestError:
+        except httpx.RequestError:
 
-                # IMPORTANT FIX
-                backend_latency = (
-                    time.time() - backend_start
-                ) 
-
+            asyncio.create_task(
                 record_failure(
                     route_id,
-                    backend["id"]
+                    backend_id
                 )
+            )
 
+            asyncio.create_task(
                 record_backend_failure(
                     route_id=route_id,
-                    backend_id=backend["id"]
+                    backend_id=backend_id
                 )
+            )
 
-                print(
-                    "Failed backend:",
-                    backend_url
-                )
+            continue
 
-                continue
-
-    # all backends failed
     total_latency = (
-        time.time() - start_time
-    ) 
+        time.perf_counter() -
+        start_time
+    )
 
-    record_metric(
-        tenant_id=tenant["id"],
-        route_id=route_id,
-        latency=total_latency,
-        status="failure"
+    asyncio.create_task(
+        record_metric(
+            tenant_id=tenant["id"],
+            route_id=route_id,
+            latency=total_latency,
+            status="failure"
+        )
     )
 
     return Response(

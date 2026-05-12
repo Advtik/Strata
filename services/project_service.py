@@ -45,7 +45,7 @@ async def get_projects_service(user):
 
             metrics_key = f"metrics:{project['id']}:{route_id}"
 
-            metrics = r.hgetall(metrics_key)
+            metrics = await r.hgetall(metrics_key)
 
             if metrics:
 
@@ -58,10 +58,16 @@ async def get_projects_service(user):
                 total_requests += int(decoded.get("total_requests", 0))
 
             # ── health check ───────────────────────────
-            health_keys = list(r.scan_iter(f"health:{route_id}:*"))
+            health_keys = []
+
+            async for key in r.scan_iter(
+                f"health:{route_id}:*"
+            ):
+
+                health_keys.append(key)
 
             for health_key in health_keys:
-                health_data = r.hgetall(health_key)
+                health_data = await r.hgetall(health_key)
                 if not health_data:
                     continue
 
@@ -108,7 +114,7 @@ async def delete_project_service(user, project_id):
     route_ids = [r["id"] for r in routes]
 
     # 🔥 CLEANUP
-    cleanup_project(project_id, route_ids)
+    await cleanup_project(project_id, route_ids)
 
     # DB delete
     await delete_project_repo(project_id)
