@@ -21,7 +21,7 @@ def init_health(route_id: int, backend_id: int):
 
     if not r.exists(key):
         r.hset(key, mapping={
-            "healthy": "1",
+            "healthy": "0",
             "failures": 0,
             "successes": 0
         })
@@ -29,7 +29,8 @@ def init_health(route_id: int, backend_id: int):
 
 async def check_backend(backend):
     try:
-        await client.get(backend['url'])
+        response=await client.get(backend['url'])
+        return 200 <= response.status_code < 400
         return True
     except Exception:
         return False
