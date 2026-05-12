@@ -3,12 +3,14 @@ from jose import jwt, JWTError
 from db.connect import db
 import os
 
+
 JWT_SECRET = os.getenv("JWT_SECRET")
 
 
 async def user_middleware(request: Request, call_next):
 
     token = request.cookies.get("strata_token")
+    print("TOKEN:", token)
 
     if token is None:
         request.state.user = None
@@ -17,6 +19,7 @@ async def user_middleware(request: Request, call_next):
     try:
 
         payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        print("PAYLOAD:", payload)
 
         user_id = payload.get("user_id")
 
@@ -28,7 +31,8 @@ async def user_middleware(request: Request, call_next):
 
         request.state.user = user
 
-    except JWTError:
+    except JWTError as e:
+        print("JWT ERROR:", e)
         request.state.user = None
 
     response = await call_next(request)
