@@ -65,7 +65,7 @@ async def github_callback_controller(code: str):
         value=token,
         httponly=True,
         secure=True,
-        samesite="lax",
+        samesite="none",
         max_age=60 * 60 * 24 * 3
     )
 
