@@ -64,8 +64,8 @@ async def github_callback_controller(code: str):
         key="strata_token",
         value=token,
         httponly=True,
-        secure=os.getenv("ENV") == "production",
-        samesite="lax",
+        secure=True,
+        samesite="none",
         max_age=60 * 60 * 24 * 3
     )
 
