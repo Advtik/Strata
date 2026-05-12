@@ -27,7 +27,10 @@ async def github_callback(code: str):
 async def get_me(request: Request):
 
     if request.state.user is None:
-        return {"error": "Not authenticated"}
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated"
+        )
 
     user = request.state.user
 
