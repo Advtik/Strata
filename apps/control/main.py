@@ -52,6 +52,6 @@ control_app.include_router(metrics_router, prefix="/metrics")
 
 control_app.middleware("http")(user_middleware)
 
-@control_app.get("/")
+@control_app.api_route("/health", methods=["GET", "HEAD"])
 async def root():
     return {"status": "healthy"}

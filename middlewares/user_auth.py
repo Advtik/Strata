@@ -16,6 +16,11 @@ async def user_middleware(
     request: Request,
     call_next
 ):
+    
+    if (
+        request.url.path.startswith("/health")
+    ):
+        return await call_next(request)
 
     token = request.cookies.get(
         "strata_token"

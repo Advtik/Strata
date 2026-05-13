@@ -86,6 +86,6 @@ async def gateway_proxy(
 
 
 
-@gateway_app.get("/")
-async def root():
-    return {"status": "healthy"}
+@gateway_app.api_route("/health", methods=["GET", "HEAD"])
+async def health():
+    return {"status": "ok"}

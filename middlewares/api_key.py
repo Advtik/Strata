@@ -12,6 +12,7 @@ async def auth_middleware(
         request.url.path.startswith("/auth")
         or request.url.path.startswith("/api")
         or request.url.path.startswith("/metrics")
+        or request.url.path.startswith("/health")
     ):
 
         return await call_next(request)
