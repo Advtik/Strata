@@ -214,7 +214,7 @@ async def proxy_handler(
                 backend_start
             )
 
-            if response.status_code >= 500:
+            if response.status_code >= 400:
 
                 asyncio.create_task(
                     record_failure(
