@@ -18,6 +18,11 @@ Strata sits between your clients and your backend services. It handles authentic
 
 ---
 
+> **Login Tip**
+>
+> If GitHub login fails, your browser may be blocking third-party cookies or OAuth session storage.  
+> Try disabling strict privacy shields/extensions or allowing third-party cookies for this site, then retry login.
+
 ## Core Features
 
 - **API Key Authentication** — every proxied request is authenticated via `x-api-key` before it reaches a backend

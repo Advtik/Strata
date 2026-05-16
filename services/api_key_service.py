@@ -20,13 +20,11 @@ async def create_api_key_service(user, project_id, name):
     if user is None:
         raise Exception("Not authenticated")
 
-    # ✅ ownership check
     owner = await get_project_owner(project_id)
 
     if not owner or owner["user_id"] != user["id"]:
         raise Exception("Not allowed")
 
-    # ✅ quota check
     count = await count_api_keys(project_id)
 
     if count >= MAX_KEYS_PER_PROJECT:
@@ -34,7 +32,6 @@ async def create_api_key_service(user, project_id, name):
 
     key = await create_api_key_repo(project_id, name)
 
-     # ✅ AUTO DEFAULT RATE LIMIT
     await set_global_rate_limit_service(
         user,
         key["id"],

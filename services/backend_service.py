@@ -9,15 +9,11 @@ from core.repository import (
 from core.redis_cleanup import cleanup_backend
 
 
-# ----------------------------
-# CREATE BACKEND
-# ----------------------------
 async def create_backend_service(user, route_id, data):
 
     if user is None:
         raise Exception("Not authenticated")
 
-    # 🔐 ownership check
     owner = await get_route_owner(route_id)
 
     if not owner or owner["user_id"] != user["id"]:
@@ -28,7 +24,6 @@ async def create_backend_service(user, route_id, data):
     if not url:
         raise Exception("URL required")
 
-    # ✅ URL validation (basic)
     if not (url.startswith("http://") or url.startswith("https://")):
         raise Exception("Invalid URL")
 
@@ -38,9 +33,7 @@ async def create_backend_service(user, route_id, data):
     return await create_backend_repo(route_id, url)
 
 
-# ----------------------------
-# GET BACKENDS
-# ----------------------------
+
 async def get_backends_service(user, route_id):
 
     if user is None:
@@ -54,9 +47,6 @@ async def get_backends_service(user, route_id):
     return await get_backends_repo(route_id)
 
 
-# ----------------------------
-# DELETE BACKEND
-# ----------------------------
 async def delete_backend_service(user, backend_id):
 
     if user is None:
@@ -69,17 +59,14 @@ async def delete_backend_service(user, backend_id):
 
     route_id = backend["route_id"]
 
-    # 🔐 ownership check via route
     owner = await get_route_owner(route_id)
 
     if not owner or owner["user_id"] != user["id"]:
         raise Exception("Not allowed")
 
-    # 🔥 Redis cleanup FIRST
     await cleanup_backend(
         route_id,
         backend_id
     )
 
-    # DB delete
     await delete_backend_repo(backend_id)

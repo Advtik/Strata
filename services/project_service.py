@@ -57,7 +57,6 @@ async def get_projects_service(user):
 
                 total_requests += int(decoded.get("total_requests", 0))
 
-            # ── health check ───────────────────────────
             health_keys = []
 
             async for key in r.scan_iter(
@@ -109,11 +108,9 @@ async def delete_project_service(user, project_id):
     if not owner or owner["user_id"] != user["id"]:
         raise Exception("Not allowed")
 
-    # 🔥 get all route_ids first
     routes = await get_project_routes(project_id)
     route_ids = [r["id"] for r in routes]
 
-    # 🔥 CLEANUP
     await cleanup_project(project_id, route_ids)
 
     # DB delete
