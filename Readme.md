@@ -4,11 +4,11 @@ A reverse proxy and API gateway for routing, rate limiting, and monitoring backe
 
 ---
 
-**Website:** [strata.advtik.com](https://strata.advtik.com)  
-**Documentation:** [strata.advtik.com/docs](https://strata.advtik.com/docs)  
-**Proxy Endpoint:** [strata-proxy.onrender.com](https://strata-proxy.onrender.com)  
-**Frontend Repository:** [github.com/Advtik/Strata-frontend](https://github.com/Advtik/Strata-frontend)  
-**Backend Repository:** [github.com/Advtik/Strata](https://github.com/Advtik/Strata)
+**Website:** [Strata](https://strata-advtik.vercel.app)  
+**Documentation:** [Strata/docs](https://strata-advtik.vercel.app/docs)  
+**Proxy Endpoint:** [Strata-proxy](https://strata-proxy-m10y.onrender.com)  
+**Frontend Repository:** [Frontend Repo](https://github.com/Advtik/Strata-frontend)  
+**Backend Repository:** [Backend-Core Repo](https://github.com/Advtik/Strata)
 
 ---
 
