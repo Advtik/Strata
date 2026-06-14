@@ -205,7 +205,7 @@ async def health_checker():
                 e
             )
 
-        await asyncio.sleep(15)
+        await asyncio.sleep(300)
 
 
 async def is_backend_healthy(

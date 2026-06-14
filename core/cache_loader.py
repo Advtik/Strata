@@ -77,4 +77,4 @@ async def cache_refresher():
         except Exception as e:
             print("Cache refresh failed:", e)
 
-        await asyncio.sleep(10)
+        await asyncio.sleep(300)
